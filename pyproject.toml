@@ -1,0 +1,37 @@
+[project]
+name = "py-dynamin"
+version = "0.1.0"
+description = "A macroeconomic agent-based model to study the implications of zero-growth."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Dylan Terry-Doyle", email = "d.c.terry-doyle@sussex.ac.uk" }
+]
+requires-python = ">=3.10"
+
+dependencies = [
+    "pyyaml",
+    "tqdm",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "psycopg2-binary"
+]
+
+[project.optional-dependencies]
+analysis = [
+    "matplotlib",
+    "scipy",
+    "powerlaw",
+    "statsmodels"
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+macroabm = ["config/*.yaml"]
