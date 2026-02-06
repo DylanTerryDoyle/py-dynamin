@@ -4,7 +4,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from numpy.typing import NDArray
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import SGDClassifier
+from sklearn.preprocessing import StandardScaler
 
 ### Import Agents ###
 from dynamin.agents.bank import Bank
@@ -234,9 +235,19 @@ class Model:
         self.kfirm_id:              int   = params['simulation']['num_cfirms']
         self.length:                int   = params['bank']['length']
         self.initial_output:        float = np.floor(self.num_households/self.num_firms)
-        ### Probability of default data ### 
-        self.cfirm_data:            pd.DataFrame = pd.DataFrame({'default': {}, 'leverage': {}})
-        self.kfirm_data:            pd.DataFrame = pd.DataFrame({'default': {}, 'leverage': {}})
+        
+        ### probability of default data ### 
+        # logistic regression data
+        self._cfirm_X = np.zeros((self.length, 1))
+        self._cfirm_y = np.zeros(self.length, dtype=np.int8)
+        self._kfirm_X = np.zeros((self.length, 1))
+        self._kfirm_y = np.zeros(self.length, dtype=np.int8)
+        # circular buffer pointers
+        self.cfirm_ptr = 0
+        self.kfirm_ptr = 0
+        self.cfirm_count = 0
+        self.kfirm_count = 0
+        
         ### Market Data ##
         self.real_consumption:      NDArray = np.zeros(shape=self.time)
         self.nominal_consumption:   NDArray = np.zeros(shape=self.time)
@@ -264,6 +275,7 @@ class Model:
         self.bank_hpi:              NDArray = np.zeros(shape=self.time)
         self.avg_loan_interest:     NDArray = np.zeros(shape=self.time)
         self.bank_defaults:         NDArray = np.zeros(shape=self.time)
+        
         ### Initial values ### 
         self.real_gdp[0]            = self.initial_output*self.num_firms
         self.nominal_gdp[0]         = self.real_gdp[0]
@@ -271,6 +283,7 @@ class Model:
         self.real_investment[0]     = self.initial_output*self.num_kfirms
         self.avg_cfirm_price[0]     = params['firm']['price']
         self.avg_kfirm_price[0]     = params['firm']['price']
+        
         ### initialise agents ###
         # initial values 
         debt_ratio = (self.params['cfirm']['d0'] + self.params['cfirm']['d1']*self.params['firm']['growth'] + self.params['cfirm']['d2']*self.params['cfirm']['acceleration'] * (self.params['firm']['growth'] + self.params['firm']['depreciation'])) / (1 + self.params['cfirm']['d2'] * self.params['firm']['growth'])
@@ -306,6 +319,28 @@ class Model:
         # intialise average makret wage and total debt
         self.avg_wage[0] = self.cfirms[0].wage[0]
         self.debt[0] = self.cfirms[0].debt[0]*self.num_cfirms
+        
+        ### initialise cfirm probability of default model ###
+        # cfirm probability model 
+        self.cfirm_pd_model = SGDClassifier(
+            loss="log_loss",
+            max_iter=10,
+            warm_start=True
+        )
+        # kfirm probability model 
+        self.kfirm_pd_model = SGDClassifier(
+            loss="log_loss",
+            max_iter=10,
+            warm_start=True
+        )
+        # cfirm data 
+        self.cfirm_scaler = StandardScaler()
+        self.cfirm_scaler_initialised = False
+        self.cfirm_model_initialised = False
+        # kfirm data 
+        self.kfirm_scaler = StandardScaler()
+        self.kfirm_scaler_initialised = False
+        self.kfirm_model_initialised = False
     
     def new_entrants(self, t: int) -> None:
         """
@@ -490,33 +525,114 @@ class Model:
             
     def probability_default(self, t: int) -> None:
         """
-        Calculates the probability of firm defaults using a logistic regression model of firm leverage ratios.
+        Calculates the probability of firm defaults using a logistic regression model
+        with standardised features.
+        """
+
+        ### cfirm probability of default estimation ###
+        if self.cfirm_count >= 10 and np.unique(self._cfirm_y[:self.cfirm_count]).size > 1:
+
+            # raw training data
+            X_raw = self._cfirm_X[:self.cfirm_count, [0]]  # Only leverage (first column)
+            y = self._cfirm_y[:self.cfirm_count]
+
+            # update scaler
+            if not self.cfirm_scaler_initialised:
+                self.cfirm_scaler.fit(X_raw)
+                self.cfirm_scaler_initialised = True
+            else:
+                self.cfirm_scaler.partial_fit(X_raw)
+
+            # standardise training data
+            X = self.cfirm_scaler.transform(X_raw)
+
+            # fit classifier
+            if not self.cfirm_model_initialised:
+                self.cfirm_pd_model.partial_fit(X, y, classes=np.array([0, 1]))
+                self.cfirm_model_initialised = True
+            else:
+                self.cfirm_pd_model.partial_fit(X, y)
+
+            # prediction data (raw) - only leverage
+            X_pred_raw = np.array([[cfirm.leverage[t]] for cfirm in self.cfirms])
+
+            # standardise prediction data
+            X_pred = self.cfirm_scaler.transform(X_pred_raw)
+
+            # predict probabilities
+            probs = self.cfirm_pd_model.predict_proba(X_pred)[:, 1]
+
+            # assign probabilities
+            for cfirm, p in zip(self.cfirms, probs):
+                cfirm.probability_default[t] = float(p)
+
+        ### kfirm probability of default estimation ###
+        if self.kfirm_count >= 10 and np.unique(self._kfirm_y[:self.kfirm_count]).size > 1:
+
+            # raw training data
+            X_raw = self._kfirm_X[:self.kfirm_count, [0]]  # Only leverage (first column)
+            y = self._kfirm_y[:self.kfirm_count]
+
+            # update scaler
+            if not self.kfirm_scaler_initialised:
+                self.kfirm_scaler.fit(X_raw)
+                self.kfirm_scaler_initialised = True
+            else:
+                self.kfirm_scaler.partial_fit(X_raw)
+
+            # standardise training data
+            X = self.kfirm_scaler.transform(X_raw)
+
+            # fit classifier
+            if not self.kfirm_model_initialised:
+                self.kfirm_pd_model.partial_fit(X, y, classes=np.array([0, 1]))
+                self.kfirm_model_initialised = True
+            else:
+                self.kfirm_pd_model.partial_fit(X, y)
+
+            # prediction data (raw) - only leverage
+            X_pred_raw = np.array([[kfirm.leverage[t]] for kfirm in self.kfirms])
+
+            # standardise prediction data
+            X_pred = self.kfirm_scaler.transform(X_pred_raw)
+
+            # predict probabilities
+            probs = self.kfirm_pd_model.predict_proba(X_pred)[:, 1]
+
+            # assign probabilities
+            for kfirm, p in zip(self.kfirms, probs):
+                kfirm.probability_default[t] = float(p)
+                
+    def default_data(self, t: int) -> None:
+        """
+        Updates firm bankruptcy data to be used in the estimation of the probability of firm defaults.
         
         Parameters
         ----------
             t : int
                 time period
         """
-        # cfirm probability of default calculation
-        if self.cfirm_data['default'].sum() > 0:
-            # instantiate sklearn logistic regression model
-            cfirm_model = LogisticRegression()
-            # fit model to cfirm data
-            cfirm_model.fit(self.cfirm_data[['leverage']], self.cfirm_data['default'])
-            # assign probability of default to loan cfirms
-            for cfirm in self.cfirms:
-                probability_default = cfirm_model.predict_proba(pd.DataFrame(np.array(cfirm.leverage[t]).reshape(1,-1), columns=['leverage']))
-                cfirm.probability_default[t] = probability_default[0,1]
-        # kfirm probability of default calculation
-        if self.kfirm_data['default'].sum() > 0:
-            # instantiate sklearn logistic regression model
-            kfirm_model = LogisticRegression()
-            # fit model to kfirm data
-            kfirm_model.fit(self.kfirm_data[['leverage']], self.kfirm_data['default'])
-            # assign probability of default to loan kfirms
-            for kfirm in self.kfirms:
-                probability_default = kfirm_model.predict_proba(pd.DataFrame(np.array(kfirm.leverage[t]).reshape(1,-1), columns=['leverage']))
-                kfirm.probability_default[t] = probability_default[0,1]
+        # C-firms
+        for cfirm in self.cfirms:
+            # where to write next data point
+            i = self.cfirm_ptr  
+            self._cfirm_X[i, 0] = cfirm.leverage[t]
+            # No longer storing amortisation_coverage in column 1
+            self._cfirm_y[i] = int(cfirm.bankrupt)
+            # update index pointer
+            self.cfirm_ptr = (self.cfirm_ptr + 1) % self.length
+            self.cfirm_count = min(self.cfirm_count + 1, self.length)
+
+        # K-firms
+        for kfirm in self.kfirms:
+            # where to write next data point
+            i = self.kfirm_ptr
+            self._kfirm_X[i, 0] = kfirm.leverage[t]
+            # No longer storing amortisation_coverage in column 1
+            self._kfirm_y[i] = int(kfirm.bankrupt)
+            # update index pointer
+            self.kfirm_ptr = (self.kfirm_ptr + 1) % self.length
+            self.kfirm_count = min(self.kfirm_count + 1, self.length)
         
     def credit_market(self, t: int) -> None:
         """
@@ -550,33 +666,6 @@ class Model:
             kfirm.determine_loan(self.banks, probabilities, t)
             kfirm.determine_deposits(t)
             kfirm.determine_default(t)
-            
-    def default_data(self, t: int) -> None:
-        """
-        Updates firm bankruptcy data to be used in the estimation of the probability of firm defaults.
-        
-        Parameters
-        ----------
-            t : int
-                time period
-        """
-        # firm probability of default data
-        for cfirm in self.cfirms:
-            # cfirm dataframe of new data 
-            new_cfirm_data = pd.DataFrame([{'default': int(cfirm.bankrupt), 'leverage': cfirm.leverage[t]}])
-            # concatonate to total cfirm dataframe
-            self.cfirm_data = pd.concat([self.cfirm_data, new_cfirm_data], ignore_index=True)
-            # reduce size if too large
-            if len(self.cfirm_data) > self.length:
-                self.cfirm_data = self.cfirm_data.iloc[-self.length:].copy()
-        for kfirm in self.kfirms:
-            # kfirm dataframe of new data 
-            new_kfirm_data = pd.DataFrame([{'default': int(kfirm.bankrupt), 'leverage': kfirm.leverage[t]}])
-            # concatonate to total kfirm dataframe
-            self.kfirm_data = pd.concat([self.kfirm_data, new_kfirm_data], ignore_index=True)
-            # reduce size if too large
-            if len(self.kfirm_data) > self.length:
-                self.kfirm_data = self.kfirm_data.iloc[-self.length:].copy()
 
     def bankruptcies(self, t: int) -> None:
         """

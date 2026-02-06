@@ -75,9 +75,13 @@ class Household:
     
     Methods
     -------
-        determine_consumption(self, cfirms: list[ConsumptionFirm], probabilities: list[float], t: int) -> None
+        determine_income(self, t: int) -> None
         
-        determine_applications(self, firms: list[ConsumptionFirm | CapitalFirm], probabilities: list[float], t: int) -> None
+        determine_desired_consumption(self, t: int) -> None
+        
+        determine_consumption(self, cfirms: list['ConsumptionFirm'], probabilities: list[float], t: int) -> None
+        
+        determine_applications(self, firms: list['ConsumptionFirm | CapitalFirm'], probabilities: list[float], t: int) -> None
         
         determine_deposits(self, t: int) -> None
     """

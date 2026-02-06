@@ -7,7 +7,7 @@ simulation:
   # random seed
   seed: 42
   # number of simulations in a batch
-  num_sims: 100
+  num_sims: 5
   # number of years in each simulation
   years: 100
   # number of steps in each year

@@ -46,7 +46,7 @@ years = np.linspace(0, num_years, num_years * steps)
 
 # random simulation 
 np.random.seed(params['simulation']['seed'])
-sim_index = np.random.randint(0, params['simulation']['num_sims'])
+sim_index = 0#np.random.randint(0, params['simulation']['num_sims'])
 print("Randomly selected simulation index for plots: ", sim_index)
 
 # database parameters 
@@ -573,6 +573,9 @@ print(f'Num obs = {len(cfirms)}')
 # normality tests
 print("\n- C-firm Output Growth Normality Tests:")
 normality_tests(cfirms["output_growth"], significance=0.01)
+
+# CCDF distribution of cfirms output
+plot_ccdf(cfirms['output'], figsize=(x_figsize,y_figsize), fontsize=fontsize, ylim=[0.00005,2], savefig=figure_path / "ccdf_cfirms_output.png")
 
 print("\n- C-firm Size Normality Tests:")
 normality_tests(cfirms["output"], significance=0.01)
