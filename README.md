@@ -89,6 +89,7 @@ py-dynamin/
 - `src/dynamin/config`: baseline parameters and database configuration (database.yaml), update user/password to match your PostgreSQL setup.
 - `examples/post_growth_scenarios`: parameters and scripts for running post-growth scenario analysis.
 - `analysis`: scripts for running batch analyses of model results.
+- `analysis/empirical_data`: empirical time-series for stylised_facts.py analysis.
 
 ## Quick Start
 
