@@ -55,7 +55,7 @@ py-dynamin/
 │        ├── simulator.py
 │        └── utils.py
 ├── examples
-│   └── post-growth scenarios
+│   └── post_growth_scenarios
 │       ├── config
 │       │   ├── database.yaml
 │       │   ├── parameters.yaml
