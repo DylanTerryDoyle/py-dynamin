@@ -32,6 +32,7 @@ pip install py-dynamin
 
 ## Project Structure
 
+```
 py-dynamin/
 ├── LICENSE
 ├── README.md
@@ -76,11 +77,12 @@ py-dynamin/
 │   └── utils.py
 └── docs
     └── DyNAMIN Model Description.pdf
+```
 
-- src/dynamin: core library for the baseline model.
-- src/dynamin/config: baseline parameters and database configuration (database.yaml), update user/password to match your PostgreSQL setup.
-- examples/post-growth scenarios: parameters and scripts for running post-growth scenario analysis.
-- analysis: scripts for running batch analyses of model results.
+- `src/dynamin`: core library for the baseline model.
+- `src/dynamin/config`: baseline parameters and database configuration (database.yaml), update user/password to match your PostgreSQL setup.
+- `examples/post_growth_scenarios`: parameters and scripts for running post-growth scenario analysis.
+- `analysis`: scripts for running batch analyses of model results.
 
 ## Quick Start
 
