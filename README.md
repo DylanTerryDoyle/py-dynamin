@@ -22,7 +22,7 @@ pip install py-dynamin
 
 Or, clone the repository for full access to the code, examples (PG-DYNAMIN) and analysis scripts:
 
-'''bash 
+```bash 
 git clone https://github.com/DylanTerryDoyle/py-dynamin.git
 ```
 
