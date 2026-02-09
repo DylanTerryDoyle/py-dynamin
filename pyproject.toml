@@ -1,0 +1,41 @@
+[project]
+name = "py-dynamin"
+version = "0.1.0"
+description = "Python DYNamic Agent-based MINskyan (Py-DYNAMIN) model."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Dylan Terry-Doyle", email = "d.c.terry-doyle@sussex.ac.uk" }
+]
+requires-python = ">=3.10"
+
+dependencies = [
+    "pyyaml",
+    "tqdm",
+    "numpy",
+    "scikit-learn",
+    "psycopg2-binary"
+]
+
+[project.optional-dependencies]
+analysis = [
+    "pandas",
+    "matplotlib",
+    "scipy",
+    "powerlaw",
+    "statsmodels"
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["dynamin*"]
+
+[tool.setuptools.package-data]
+dynamin = ["config/*.yaml"]

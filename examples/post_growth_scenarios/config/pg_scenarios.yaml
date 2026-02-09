@@ -1,0 +1,21 @@
+###----------------------------------------------------------------------------###
+### File for scenario parameters.                                              ###
+###                                                                            ###
+### - each scenario must have a correspond name                                ###
+### - number of parameters in a list must correspond to the number of scenario ###
+###   (all lists have the same length)                                         ###
+### - each key must correpond to a key in the base parameters file             ###
+###----------------------------------------------------------------------------###
+
+# name of each scenario
+scenario_names: ["growth1", "growth2", "zero_growth1", "zero_growth2"]
+# firm parameters per scenario 
+firm:
+  # average growth rate for each scenario
+  growth: [0.02, 0.02, 0.0, 0.0]
+# cfirm parameters per scenario
+cfirm:
+  # productivity growth debt volatility parameter
+  d1: [3, 5, 3, 5]
+  # profit rate debt volatility parameter
+  d2: [2, 3, 2, 3]

@@ -1,0 +1,96 @@
+###-------------------------------------###
+### File for base simulation parameters ###
+###-------------------------------------###
+
+### simulation parameters ###
+simulation:
+  # random seed
+  seed: 42
+  # number of cpu workers (cores)
+  n_workers: 8
+  # number of simulations in a batch
+  num_sims: 100
+  # number of years in each simulation
+  years: 100
+  # number of steps in each year
+  steps: 4
+  # start year (transient data cut-off)
+  start: 100
+  # number of C-firms
+  num_cfirms: 400
+  # number of K-firms
+  num_kfirms: 100
+  # number of households
+  num_households: 5000
+  # number of banks
+  num_banks: 20
+
+### base scenario agent parameters ###
+# Bank Parameters
+bank:
+  # annual deposit interest
+  deposit_interest: 0.001
+  # annual loan interest initial value
+  loan_interest: 0.02
+  # annual loan interest standard deviation
+  sigma: 0.03
+  # annual speed of adjustment
+  adjust: 0.1
+  # minimum capital ratio (regulatory requirement)
+  min_capital_ratio: 0.06
+  # number of years to repay loan
+  loan_years: 10
+  # proabability of deafault max data set length
+  length: 500
+
+# Firm Parameters
+firm:
+  # demand adaption
+  adapt: 0.1
+  # speed of adjustment (prices & wages)
+  adjust: 0.1
+  # annual labour productivity average growth rate
+  growth: 0.02
+  # annual labour productivity standard deviation
+  sigma: 0.03
+  # annual price standard deviation
+  sigma_p: 0.03
+  # annual wage standard deviation
+  sigma_w: 0.03
+  # annual capital depreciation rate
+  depreciation: 0.1
+  # wage liquidity buffer
+  wage_buffer: 1
+  # number of banks visited (credit market)
+  num_banks: 2
+  # initial labour productivity
+  productivity: 1
+  # initial price
+  price: 1
+
+# Capital Firm Parameters
+kfirm:
+  # desired ratio of excess output
+  excess_output: 0.1
+
+# Consumption Firm Parameters
+cfirm:
+  # capital acceleration
+  acceleration: 3
+  # desired debt parameters
+  d0: 0.5
+  d1: 3
+  d2: 2
+  # number of K-firms visited (capital market)
+  num_kfirms: 2
+
+# Household Parameters
+household:
+  # marginal propensity to consume out of income
+  mpc_income: 0.8
+  # marginal propensity to consume out of deposits
+  mpc_deposits: 0.1
+  # number of firms visited (labour market)
+  num_firms: 4
+  # number of C-firms visited (consumption market)
+  num_cfirms: 2

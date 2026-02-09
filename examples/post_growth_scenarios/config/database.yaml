@@ -1,0 +1,76 @@
+###---------------------------------------------###
+### File for PostgreSQL database parameters     ###
+###                                             ###
+### For local storage                           ###
+### - database_name: can change                 ###
+### - user: unchanged                           ###
+### - password: can change                      ###
+### - host: unchanged                           ###
+### - port: unchanged                           ###
+###                                             ###
+### For cloud storage                           ###
+### - change to database specific parameters.   ###
+###---------------------------------------------###
+
+### database parameters ###
+
+# name of database
+database_name: "test"
+# user: default set to postgres, change to user for limited permissions
+user: "postgres"
+# password for the database
+password: "password123"
+# host address for the database: default set to localhost
+host: "localhost"
+# port for the database: postgres default port = 5432
+port: "5432"
+
+## variables to save ###
+# macroeconomic variables
+macro: [
+  "real_consumption",
+  "nominal_consumption",
+  "real_investment",
+  "nominal_investment",
+  "real_gdp",
+  "nominal_gdp",
+  "esl",
+  "debt",
+  "profits",
+  "avg_cfirm_price",
+  "avg_kfirm_price",
+  "cfirm_nhhi",
+  "kfirm_nhhi",
+  "cfirm_hpi",
+  "kfirm_hpi",
+  "cfirm_defaults",
+  "kfirm_defaults",
+  "wages",
+  "avg_wage",
+  "employment",
+  "unemployment_rate",
+  "gini",
+  "bank_nhhi",
+  "bank_hpi",
+  "avg_loan_interest",
+  "bank_defaults"
+]
+# firms variables
+firms: [
+  "output",
+  "output_growth",
+  "age",
+  "market_share",
+  "labour"
+]
+# banks variables
+banks: [
+  "loans",
+  "age",
+  "market_share"
+]
+# households variables
+households: [
+  "income",
+  "deposits"
+]
