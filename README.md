@@ -14,10 +14,16 @@ The Py-DYNAMIN model is a reusable agent-based macroeconomic modelling framework
 
 ## Installation
 
-You can install Py-DYNAMIN via pip from TestPyPI or PyPI:
+You can install the baseline model Py-DYNAMIN via pip from PyPI using:
 
 ```bash
 pip install py-dynamin
+```
+
+Or, clone the repository for full access to the code, examples (PG-DYNAMIN) and analysis scripts:
+
+'''bash 
+git clone https://github.com/DylanTerryDoyle/py-dynamin.git
 ```
 
 ## Dependencies:
