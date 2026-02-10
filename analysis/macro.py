@@ -3,7 +3,8 @@ import pandas as pd
 from pathlib import Path
 import scipy.stats as stats
 import matplotlib.pyplot as plt
-from analysis.utils import load_yaml, sql_engine, load_macro_data, box_plot_scenarios
+from dynamin.utils import load_config, sql_engine
+from analysis.utils import load_macro_data, box_plot_scenarios
 
 ### Plot Parameters ###
 
@@ -22,20 +23,16 @@ lower = 0.05
 ### Paths ###
 
 # current working directory path
-cwd_path = Path.cwd()
-# analysis path
-analysis_path = cwd_path / "analysis"
+analysis_path = Path(__file__).parent
 # figure path
-figure_path = analysis_path / "figures" / "macro"
+figure_path = analysis_path / "figures" / "stylised_facts"
 # create figure path if it doesn't exist
 figure_path.mkdir(parents=True, exist_ok=True)
-# parameters path 
-params_path = cwd_path / "src" / "dynamin" / "config"
 
 ### parameters ###
 
 # parameters
-params = load_yaml(params_path /  "parameters.yaml")
+params = load_config("parameters.yaml")
 # analysis parameters
 steps = params['simulation']['steps']
 num_years = params['simulation']['years']
@@ -48,7 +45,7 @@ sim_index = np.random.randint(0, params['simulation']['num_sims'])
 print("Randomly selected simulation index for plots: ", sim_index)
 
 # database parameters 
-db_params = load_yaml(params_path / "database.yaml")
+db_params = load_config("database.yaml")
 
 ### SQL engine ###
 
