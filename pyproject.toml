@@ -14,7 +14,8 @@ dependencies = [
     "tqdm",
     "numpy",
     "scikit-learn",
-    "psycopg2-binary"
+    "psycopg2-binary",
+    "sqlalchemy"
 ]
 
 [project.optional-dependencies]
