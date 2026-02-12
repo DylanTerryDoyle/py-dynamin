@@ -5,6 +5,13 @@ import matplotlib.pyplot as plt
 from dynamin.utils import load_config, sql_engine
 from analysis.utils import load_macro_data, box_plot_scenarios
 
+# is this analysis from the examples folder?
+is_true = input('Run micro.py analysis for an example from the examples folder [y/n]: ').lower().startswith('y')
+
+# if so, which example is this
+if is_true:
+    example_folder = input("What is the example folder called? ")
+
 ### Plot Parameters ###
 
 # change matplotlib font to serif
@@ -21,17 +28,24 @@ lower = 0.05
 
 ### Paths ###
 
-# current working directory path
+# analysis directory
 analysis_path = Path(__file__).parent
+# analysis directory 
+dynamin_path = Path(analysis_path).parent
+# examples directory 
+examples_path = dynamin_path / "examples"
 # figure path
-figure_path = analysis_path / "figures" / "stylised_facts"
+figure_path = analysis_path / "figures" / "micro"
 # create figure path if it doesn't exist
 figure_path.mkdir(parents=True, exist_ok=True)
 
 ### parameters ###
 
 # parameters
-params = load_config("parameters.yaml")
+if is_true:
+    params = load_config(examples_path / example_folder / "config" / "parameters.yaml")
+else:
+    params = load_config("parameters.yaml")
 # analysis parameters
 steps = params['simulation']['steps']
 num_years = params['simulation']['years']
@@ -86,7 +100,7 @@ for i, scenario in scenarios.iterrows():
     plt.plot(years, macro_data.loc[macro_data["simulation_index"]==sim_index, "esl_gdp"], linestyle="--", color="k", linewidth=1)
     plt.fill_between(years, macro_lower["esl_gdp"], macro_upper["esl_gdp"], color="grey", alpha=0.2, linewidth=1)
     plt.tight_layout()
-    plt.ylim((-0.05, 0.55))
+    # plt.ylim((-0.05, 0.55))
     plt.yticks((0.0, 0.1, 0.2, 0.3, 0.4, 0.5),fontsize=fontsize)
     plt.xticks(fontsize=fontsize)
     plt.savefig(figure_path / f"esl_gdp_{suffix}", bbox_inches="tight")    

@@ -444,21 +444,14 @@ def plot_ccdf(
     # --- basic data hygiene ---
     data = np.asarray(data, dtype=float)
     data = data[np.isfinite(data)]
-    data = data[data > 0]
+    data = data[data > 1]
 
     if data.size < 100:
         raise ValueError("Too few positive samples for reliable power-law fitting.")
 
-    # --- bound xmin search ---
-    xmin_bounds = (
-        np.percentile(data, 90),
-        np.percentile(data, 99),
-    )
-
     # --- power-law fit ---
     results = pl.Fit(
         data,
-        xmin=xmin_bounds,
         discrete=False,
         verbose=False,
     )

@@ -6,6 +6,13 @@ import matplotlib.pyplot as plt
 from dynamin.utils import load_config, sql_engine
 from analysis.utils import load_macro_data, box_plot_scenarios
 
+# is this analysis from the examples folder?
+is_true = input('Run macro.py analysis for an example from the examples folder [y/n]: ').lower().startswith('y')
+
+# if so, which example is this
+if is_true:
+    example_folder = input("What is the example folder called? ")
+
 ### Plot Parameters ###
 
 # change matplotlib font to serif
@@ -22,17 +29,24 @@ lower = 0.05
 
 ### Paths ###
 
-# current working directory path
+# analysis directory
 analysis_path = Path(__file__).parent
+# analysis directory 
+dynamin_path = Path(analysis_path).parent
+# examples directory 
+examples_path = dynamin_path / "examples"
 # figure path
-figure_path = analysis_path / "figures" / "stylised_facts"
+figure_path = analysis_path / "figures" / "macro"
 # create figure path if it doesn't exist
 figure_path.mkdir(parents=True, exist_ok=True)
 
 ### parameters ###
 
-# parameters
-params = load_config("parameters.yaml")
+# base parameters
+if is_true:
+    params = load_config(examples_path / example_folder / "config" / "parameters.yaml")
+else:
+    params = load_config("parameters.yaml")
 # analysis parameters
 steps = params['simulation']['steps']
 num_years = params['simulation']['years']

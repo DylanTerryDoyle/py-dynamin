@@ -8,7 +8,7 @@ from dynamin.utils import load_config, sql_engine
 from analysis.utils import load_macro_data, plot_autocorrelation, plot_cross_correlation, normality_tests, plot_ccdf
 
 # is this analysis from the examples folder?
-is_true = input('Is this an analysis from the examples folder [y/n]: ').lower().startswith('y')
+is_true = input('Run stylised_facts.py analysis for an example from the examples folder [y/n]: ').lower().startswith('y')
 
 # if so, which example is this
 if is_true:
@@ -43,7 +43,7 @@ figure_path.mkdir(parents=True, exist_ok=True)
 
 ### parameters ###
 
-# base parameters file
+# base parameters
 if is_true:
     params = load_config(examples_path / example_folder / "config" / "parameters.yaml")
 else:
@@ -57,11 +57,10 @@ years = np.linspace(0, num_years, num_years * steps)
 
 # random simulation 
 np.random.seed(params['simulation']['seed'])
-sim_index = 0#np.random.randint(0, params['simulation']['num_sims'])
+sim_index = np.random.randint(0, params['simulation']['num_sims'])
 print("Randomly selected simulation index for plots: ", sim_index)
 
 # database parameters
-# base parameters file
 if is_true:
     db_params = load_config(examples_path / example_folder / "config" / "database.yaml")
 else:
