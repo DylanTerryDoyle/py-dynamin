@@ -3,14 +3,14 @@ from dynamin.simulator import run
 from dynamin.utils import load_config
 
 def run_pg_scenarios():
-    # database parameters (dynamin config folder)
-    db_params = load_config("database.yaml")
-    
-    # simulation parameters (dynamin config folder)
-    params = load_config("parameters.yaml")
-
     # get file path to config folder
     config_path = Path(__file__).parent / "config"
+
+    # database parameters (dynamin config folder)
+    db_params = load_config(config_path / "database.yaml")
+    
+    # simulation parameters (dynamin config folder)
+    params = load_config(config_path / "parameters.yaml")
 
     # scenario parameters (example config folder)
     pg_scenario_params = load_config(config_path / "pg_scenarios.yaml")
