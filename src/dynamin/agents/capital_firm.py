@@ -321,21 +321,6 @@ class CapitalFirm(AbstractFirm):
         # desired level of inventories as a ration of current output
         self.desired_inventories[t] = self.output[t] * self.excess_output
     
-    def determine_profits(self, t: int) -> None:
-        """
-        Calculate profits and profit share.
-        
-        Parameters
-        ----------
-            t : int
-                time period
-        """
-        # calculate profits
-        self.profits[t] = self.price[t] * self.quantity[t] + self.deposit_interest * self.deposits[t-1] - self.wage_bill[t] - self.total_interest[t]
-        # calculate profit share of revenue
-        if self.output[t] != 0:
-            self.profit_share[t] = self.profits[t] / (self.price[t] * self.output[t])
-    
     def determine_desired_output(self, t: int) -> None:
         """
         Calculate K-firm desired output.

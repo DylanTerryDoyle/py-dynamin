@@ -389,21 +389,6 @@ class ConsumptionFirm(AbstractFirm):
         """
         # calculate inventories for current period
         self.inventories[t] = self.output[t]
-        
-    def determine_profits(self, t: int) -> None:
-        """
-        Calculate profits and profit share.
-        
-        Parameters
-        ----------
-            t : int
-                time period
-        """
-        # calculate profits
-        self.profits[t] = self.price[t] * self.quantity[t] + self.deposit_interest * self.deposits[t-1] - self.wage_bill[t] - self.total_interest[t]
-        # calculate profit share of revenue
-        if self.output[t] != 0:
-            self.profit_share[t] = self.profits[t] / (self.price[t] * self.output[t])
 
     def determine_desired_output(self, t: int) -> None:
         """
@@ -476,7 +461,7 @@ class ConsumptionFirm(AbstractFirm):
                 self.investment[t] += goods_purchased
                 # update investment cost
                 self.investment_cost[t] += goods_cost
-                # reduce desired investment
+                # reduce desired investment cost
                 self.desired_investment_cost[t] -= goods_cost
                 # cfirm stops ordering investment goods if desired investment is exceeded
                 if self.desired_investment_cost[t] <= 1e-6:
@@ -532,6 +517,7 @@ class ConsumptionFirm(AbstractFirm):
         """
         # update deposits by accounting identity 
         self.deposits[t] = self.deposits[t-1] + self.profits[t] + self.loans[t] - self.investment_cost[t] - self.total_repayment[t]
+
     def determine_balance_sheet(self, t: int) -> None:
         """
         Calculate C-firm balance sheet, assets and liabilities.

@@ -353,7 +353,7 @@ class AbstractFirm(ABC):
         self.labour_demand[t] = self.desired_labour[t-1] - self.labour[t]
         # number of vacancies
         self.vacancies[t] = max(self.labour_demand[t], 0)
-        
+    
     def determine_wages(self, avg_wage: float, t: int) -> None:
         """
         Calculate wage rate. 
@@ -475,7 +475,7 @@ class AbstractFirm(ABC):
                 time period
         """
         # annual output growth as the difference in the natural log
-        if self.output[t-self.steps] > 0 and t >= self.steps:
+        if self.output[t] > 0 and self.output[t-self.steps] > 0 and t >= self.steps:
             self.output_growth[t] = np.log(self.output[t]) - np.log(self.output[t-self.steps])
 
     def determine_costs(self, t: int) -> None:
@@ -523,8 +523,11 @@ class AbstractFirm(ABC):
             t : int
                 time period
         """
-        # to be overwritten
-        pass
+        # calculate profits
+        self.profits[t] = self.price[t] * self.quantity[t] + self.deposit_interest * self.deposits[t-1] - self.wage_bill[t] - self.total_interest[t]
+        # calculate profit share of revenue
+        if self.output[t] != 0:
+            self.profit_share[t] = self.profits[t] / (self.price[t] * self.output[t])
 
     def determine_equity(self, t: int) -> None:
         """
@@ -723,7 +726,7 @@ class AbstractFirm(ABC):
         # period interest rate 
         period_interest = interest * self.dt
         # amortisation cost each period
-        return loan*((period_interest * (1 + period_interest) ** self.loan_periods) / ((1 + period_interest) ** self.loan_periods - 1))
+        return loan * ((period_interest * (1 + period_interest) ** self.loan_periods) / ((1 + period_interest) ** self.loan_periods - 1))
 
     def compute_new_loan(self, loan: float, interest: float, bank_id: int, t: int) -> None:
         """
