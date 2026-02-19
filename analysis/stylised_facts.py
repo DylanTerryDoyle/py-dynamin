@@ -521,7 +521,7 @@ plt.savefig(figure_path / 'dist_rgdp_growth', bbox_inches='tight')
 print(f'- Subbotin fit:\n   - beta = {params[0]}\n   - mu = {params[1]}\n   - alpha = {params[2]}')
 print(f'- Laplace fit:\n   - mu = {laplace_params[0]}\n   - alpha = {laplace_params[1]}')
 print(f'- Norm fit:\n   - mu = {norm_params[0]}\n   - alpha = {norm_params[1]}')
-print(f"num obs = {len(macro_data)}")
+print(f"- num obs = {len(macro_data)}")
 
 # normality tests
 normality_tests(macro_data["rgdp_growth"], significance=0.01)
@@ -680,10 +680,12 @@ kfirms = pd.read_sql_query(
         "middle": middle
     }
 )
-
 # normality tests
 print("\n- K-firm Output Growth Normality Tests:")
 normality_tests(kfirms["output_growth"], significance=0.01)
+
+# CCDF distribution of cfirms output
+plot_ccdf(kfirms['output'], figsize=(x_figsize,y_figsize), fontsize=fontsize, ylim=[0.00005,2], savefig=figure_path / "ccdf_kfirms_output.png")
 
 print("\n- K-firm Size Normality Tests:")
 normality_tests(kfirms["output"], significance=0.01)

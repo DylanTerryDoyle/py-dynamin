@@ -220,44 +220,52 @@ def normality_tests(data: pd.Series, significance: float=0.01):
     # Kolmogorov-Smirnov Test for Nomaliy
     ks_result = stats.kstest(data, 'norm')
     # print test outcome
-    print('\n- Kolmogorov-Smirnov Test:')
+    print('\n- Kolmogorov-Smirnov Test')
     if ks_result.pvalue < significance:
         print(f"  - Reject null hypothesis => not normally distributed ({significance*100}% significance level)")
     else:
         print(f"  - Accept null hypothesis => normally distributed ({significance*100}% significance level)")
     # print results
-    print(f'  - KS test resutls: \n{ks_result}\n')
+    print(f'  - Resutls:')
+    print(f'    - test stat = {round(ks_result.statistic, 3)}')
+    print(f'    - p-value = {round(ks_result.pvalue, 3)}')
+
 
     # Shapiro-Wilk Test for Nomaliy
     sw_result = stats.shapiro(data)
     # print test outcome
-    print('- Shapiro-Wilk Test:')
+    print('\n- Shapiro-Wilk Test')
     if sw_result.pvalue < significance:
         print(f"  - Reject null hypothesis => not normally distributed ({significance*100}% significance level)")
     else:
         print(f"  - Accept null hypothesis => normally distributed ({significance*100}% significance level)")
     # print results
-    print(f'  - SW test results: \n{sw_result}\n')
+    print(f'  - Results:')
+    print(f'    - test stat = {round(sw_result.statistic, 3)}')
+    print(f'    - p-value = {round(sw_result.pvalue, 3)}')
+
 
     # Anderson-Darling Test for Nomaliy
     ad_result = stats.anderson(data, 'norm')
-    # print test outcome
-    print('- Anderson-Darling Test')
-    # print results
-    print(f'  - AD test results: \n{ad_result}')
+    # AD p-value
     if ad_result.statistic >= .6:
-        p = np.exp(1.2937 - 5.709*ad_result.statistic - .0186*(ad_result.statistic**2))
+        ad_pvalue = np.exp(1.2937 - 5.709*ad_result.statistic - .0186*(ad_result.statistic**2))
     elif ad_result.statistic >=.34:
-        p = np.exp(.9177 - 4.279*ad_result.statistic - 1.38*(ad_result.statistic**2))
+        ad_pvalue = np.exp(.9177 - 4.279*ad_result.statistic - 1.38*(ad_result.statistic**2))
     elif ad_result.statistic >.2:
-        p = 1 - np.exp(-8.318 + 42.796*ad_result.statistic - 59.938*(ad_result.statistic**2))
+        ad_pvalue = 1 - np.exp(-8.318 + 42.796*ad_result.statistic - 59.938*(ad_result.statistic**2))
     else:
-        p = 1 - np.exp(-13.436 + 101.14*ad_result.statistic - 223.73*(ad_result.statistic**2))
-    print("  - AD p-value = ", p)
-    if p < significance:
+        ad_pvalue = 1 - np.exp(-13.436 + 101.14*ad_result.statistic - 223.73*(ad_result.statistic**2))
+    # print test outcome
+    print('\n- Anderson-Darling Test')
+    # print results
+    if ad_pvalue < significance:
         print(f"  - Reject null hypothesis => not normally distributed ({significance*100}% significance level)")
     else:
         print(f"  - Accept null hypothesis => normally distributed ({significance*100}% significance level)")
+    print("  - Results:")
+    print(f"    - test stat = {round(ad_result.statistic, 3)}")
+    print(f"    - p-value = {round(ad_pvalue, 3)}")
 
 def plot_autocorrelation(
     simulated: np.typing.ArrayLike, 
@@ -450,18 +458,10 @@ def plot_ccdf(
         raise ValueError("Too few positive samples for reliable power-law fitting.")
 
     # --- power-law fit ---
-    results = pl.Fit(
-        data,
-        discrete=False,
-        verbose=False,
-    )
+    results = pl.Fit(data)
 
     alpha = results.alpha
     xmin = results.xmin
-
-    n_tail = np.sum(data >= xmin)
-    if n_tail < 50:
-        print("Warning: very few points in the power-law tail (n < 50).")
 
     # --- empirical CCDF ---
     x = np.sort(data)
@@ -529,11 +529,5 @@ def plot_ccdf(
     plt.close()
 
     # --- diagnostics ---
-    print(f"Power-law exponent (alpha) = {alpha:.4f}")
-    print(f"Power-law xmin = {xmin:.4f}")
-    print(f"Tail size (n >= xmin) = {n_tail}")
-    print(
-        "Distribution comparison (PL vs LN) =",
-        results.distribution_compare("power_law", "lognormal"),
-        "\n",
-    )
+    print(f" - Power-law exponent (alpha) = {alpha:.4f}")
+    print(f" - Power-law xmin = {xmin:.4f}\n")
