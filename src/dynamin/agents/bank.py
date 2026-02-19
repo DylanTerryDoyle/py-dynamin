@@ -209,7 +209,7 @@ class Bank:
         self.liabilities:               NDArray = np.zeros(shape=self.time)
         self.age:                       NDArray = np.zeros(shape=self.time)
         # Initial values
-        self.loan_interest[0]           = params['bank']['loan_interest']
+        self.loan_interest[0]           = params['bank']['loan_interest'] + params['firm']['inflation']
 
     def __repr__(self) -> str:
         """
@@ -332,7 +332,7 @@ class Bank:
         # minimum capital adequacy ratio, function of risk (expected bad loans ratio)
         self.desired_capital_ratio[t] = max(self.min_capital_ratio, self.expected_loss_ratio[t])
 
-    def determine_loan_interest(self, t: int) -> None:
+    def determine_loan_interest(self, inflation: float, t: int) -> None:
         """
         Calculate bank loan interest rate.
         
@@ -341,11 +341,12 @@ class Bank:
             t : int 
                 time period
         """
+        loan_interest_target = max(inflation + self.natural_interest, self.natural_interest)
         # update loan interest rate
         if self.desired_capital_ratio[t] >= self.capital_ratio[t] and self.loans[t] > 1e-6:
-            self.loan_interest[t] = self.loan_interest[t-1] * (1 + self.sigma * abs(np.random.randn())) + self.adjust * (self.natural_interest - self.loan_interest[t-1])
+            self.loan_interest[t] = self.loan_interest[t-1] * (1 + self.sigma * abs(np.random.randn())) + self.adjust * (loan_interest_target - self.loan_interest[t-1])
         else:
-            self.loan_interest[t] = self.loan_interest[t-1] * (1 - self.sigma * abs(np.random.randn())) + self.adjust * (self.natural_interest - self.loan_interest[t-1])
+            self.loan_interest[t] = self.loan_interest[t-1] * (1 - self.sigma * abs(np.random.randn())) + self.adjust * (loan_interest_target - self.loan_interest[t-1])
 
     def determine_bad_loans(self, bankrupt_firm: 'ConsumptionFirm | CapitalFirm', t: int) -> None:
         """

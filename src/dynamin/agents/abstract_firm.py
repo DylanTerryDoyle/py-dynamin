@@ -247,7 +247,16 @@ class AbstractFirm(ABC):
         fire(self, household: Household) -> None
     """
     
-    def __init__(self, id: int, initial_output: float, initial_wage: float, params: dict) -> None:
+    def __init__(
+            self, 
+            id: int, 
+            init_output: float, 
+            init_wage: float, 
+            init_profits: float, 
+            init_deposits: float, 
+            init_equity: float,
+            params: dict
+        ) -> None:
         """
         Firm class initialisation.
         
@@ -325,15 +334,15 @@ class AbstractFirm(ABC):
         self.interest:                  NDArray = np.zeros(shape=self.time)
         self.bank_ids:                  NDArray = np.zeros(shape=self.time)
         # Initial values        
-        self.output[:]                  = initial_output
-        self.desired_output[0]          = initial_output
-        self.demand[0]                  = initial_output
-        self.expected_demand[0]         = initial_output
-        self.productivity[:]            = params['firm']['productivity']
+        self.output[0]                  = init_output
+        self.desired_output[0]          = init_output
+        self.demand[0]                  = init_output
+        self.expected_demand[0]         = init_output
+        self.productivity[0]            = params['firm']['productivity']
         self.expected_productivity[0]   = params['firm']['productivity']
-        self.desired_labour[0]          = initial_output / self.productivity[0]
+        self.desired_labour[0]          = init_output / self.productivity[0]
         self.price[0]                   = params['firm']['price']
-        self.wage[0]                    = initial_wage
+        self.wage[0]                    = init_wage
         self.bank_ids[:]                = np.nan
 
     def determine_vacancies(self, t: int) -> None:
@@ -420,7 +429,10 @@ class AbstractFirm(ABC):
         # update productivity
         self.productivity[t] = self.productivity[t-1] * np.exp(self.growth - 0.5 * (self.sigma ** 2) + self.sigma * np.random.randn())
         # annual productivity growth as the difference in the natural log
-        self.productivity_growth[t] = np.log(self.productivity[t]) - np.log(self.productivity[t-self.steps])
+        if t < self.steps:
+            self.productivity_growth[t] = np.log(self.productivity[t]) - np.log(self.productivity[0])
+        else:
+            self.productivity_growth[t] = np.log(self.productivity[t]) - np.log(self.productivity[t-self.steps])
         # expected productivity in the next period
         self.expected_productivity[t] = self.productivity[t] * np.exp(self.growth)
     

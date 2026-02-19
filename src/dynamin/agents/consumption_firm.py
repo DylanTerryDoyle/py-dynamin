@@ -292,7 +292,17 @@ class ConsumptionFirm(AbstractFirm):
         determine_investment(self, kfirms: list[CapitalFirm], probabilities: list, t: int) -> None
     """
     
-    def __init__(self, id: int, initial_output: float, initial_wage: float, params: dict) -> None:
+    def __init__(
+            self, 
+            id: int, 
+            init_output: float, 
+            init_wage: float, 
+            init_profits: float, 
+            init_deposits: float, 
+            init_equity: float,
+            init_debt: float,
+            params: dict
+        ) -> None:
         """
         CapitalFirm class initialisation, inherits from Firm class.
         
@@ -310,7 +320,7 @@ class ConsumptionFirm(AbstractFirm):
             params : dict
                 model parameters
         """
-        super().__init__(id, initial_output, initial_wage, params)
+        super().__init__(id, init_output, init_wage, init_profits, init_deposits, init_equity, params)
         # Parameters
         self.acceleration:              float = params['cfirm']['acceleration']
         self.num_kfirms:                int   = params['cfirm']['num_kfirms']
@@ -329,20 +339,19 @@ class ConsumptionFirm(AbstractFirm):
         self.desired_debt:              NDArray = np.zeros(shape=self.time)
         # Initial values
         self.market_share[0]            = 1 / params['simulation']['num_cfirms']
-        self.capital[0]                 = initial_output * self.acceleration
-        self.desired_debt_ratio[0]      = (self.d0 + self.d1 * self.growth * self.steps + self.d2 * self.acceleration * (self.growth * self.steps + self.depreciation * self.steps)) / (1 + self.d2 * self.growth * self.steps)
-        self.loans[0]                   = self.desired_debt_ratio[0] * initial_output
+        self.capital[0]                 = init_output * self.acceleration
+        self.loans[0]                   = init_debt
         self.repayment[0]               = self.repayment_rate * self.loans[0]
-        self.interest[0]                = self.compute_amortisation(self.loans[0], params['bank']['loan_interest']) - self.repayment[0]
+        self.interest[0]                = self.compute_amortisation(self.loans[0], params['bank']['loan_interest'] + params['firm']['inflation']) - self.repayment[0]
         self.debt[0]                    = self.loans[0]
+        self.desired_debt_ratio[0]      = init_debt / (init_output * params['firm']['price'])
         self.total_interest[0]          = self.compute_total_interest()
         self.total_repayment[0]         = self.compute_total_repayment()
-        self.profit_share[0]            = self.acceleration * (self.growth * self.steps + self.depreciation * self.steps) - self.growth * self.steps * self.desired_debt_ratio[0]
-        self.profits[0]                 = self.profit_share[0] * initial_output
-        self.wage_bill[0]               = self.wage[0] * initial_output
-        self.deposits[0]                = self.profits[0] + self.debt[0]
-        self.equity[0]                  = self.capital[0] + self.deposits[0] - self.debt[0]
-        self.leverage[0]                = self.debt[0] / (self.equity[0] + self.debt[0])
+        self.profits[0]                 = init_profits
+        self.profit_share[0]            = self.profits[0] / (init_output * params['firm']['price'])
+        self.deposits[0]                = init_deposits
+        self.equity[0]                  = init_equity
+        self.leverage[0]                = self.debt[0] / self.deposits[0]
 
     def __repr__(self) -> str:
         """

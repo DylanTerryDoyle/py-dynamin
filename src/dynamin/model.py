@@ -12,8 +12,11 @@ from dynamin.agents.household import Household
 from dynamin.agents.capital_firm import CapitalFirm
 from dynamin.agents.consumption_firm import ConsumptionFirm
 
-# import data collector
+### import data collector ###
 from dynamin.data_collector import DataCollector
+
+### import balanced growth path (BGP) model ###
+from dynamin.bgp_model import balanced_growth_solution
 
 ### Model Class ###
 class Model:
@@ -259,6 +262,7 @@ class Model:
         self.profits:               NDArray = np.zeros(shape=self.time)
         self.avg_cfirm_price:       NDArray = np.zeros(shape=self.time)
         self.avg_kfirm_price:       NDArray = np.zeros(shape=self.time)
+        self.inflation:             NDArray = np.zeros(shape=self.time)
         self.cfirm_nhhi:            NDArray = np.zeros(shape=self.time)
         self.kfirm_nhhi:            NDArray = np.zeros(shape=self.time)
         self.cfirm_hpi:             NDArray = np.zeros(shape=self.time)
@@ -276,25 +280,137 @@ class Model:
         self.bank_defaults:         NDArray = np.zeros(shape=self.time)
         
         ### Initial values ### 
-        self.real_gdp[0]            = self.initial_output*self.num_firms
-        self.nominal_gdp[0]         = self.real_gdp[0]
-        self.real_consumption[0]    = self.initial_output*self.num_cfirms
-        self.real_investment[0]     = self.initial_output*self.num_kfirms
+        self.real_gdp[0]            = self.initial_output * self.num_firms
+        self.nominal_gdp[0]         = self.real_gdp[0] * params['firm']['price']
+        self.real_consumption[0]    = self.initial_output * self.num_cfirms
+        self.real_investment[0]     = self.initial_output * self.num_kfirms
         self.avg_cfirm_price[0]     = params['firm']['price']
         self.avg_kfirm_price[0]     = params['firm']['price']
+        self.inflation[0]           = params['firm']['inflation']
         
+        ### balanced growth ###
+        # parameters
+        # real growth rate 
+        g = params["firm"]["growth"]
+        # inflation
+        gP = params["firm"]["inflation"]
+        # nominal growth rate 
+        gN = g + gP
+        # deposit interest rate 
+        rM = params["bank"]["deposit_interest"]
+        # loan interest rate 
+        rL = params["bank"]["loan_interest"] + gP
+        # depreciation rate 
+        delta = params["firm"]["depreciation"]
+        # capital to output ratio
+        nu = params["cfirm"]["acceleration"]
+        # capital firm inventory buffer
+        xi = params["kfirm"]["excess_output"]
+        # marginal propensity to consume out of income
+        cY = params["household"]["mpc_income"]
+        # marginal propensity to consume out of deposits
+        cM = params["household"]["mpc_deposits"]
+        # debt params 
+        d0 = params["cfirm"]["d0"]
+        d1 = params["cfirm"]["d1"]
+        d2 = params["cfirm"]["d2"]
+        # number of cfirms 
+        N_C = params["simulation"]["num_cfirms"]
+        # number of kfirms 
+        N_K = params["simulation"]["num_kfirms"]
+        # consumption sector share
+        s_C = N_C / (N_C + N_K)
+        # capital sector share
+        s_K = 1 - s_C
+        # wage share 
+        omega = (s_C * (cM + gN - rM * (1 - cY))) / (cM + gN * cY - 2 * rM * cY * (1 - cY))
+        # household deposit ratio
+        m_H = (s_C * (1 - cY)) / (cM + gN * cY - 2 * rM * cY * (1 - cY))
+        # kfirm profits 
+        pi_K = (gN * (s_K * (1 - delta * xi) - omega * s_K)) / (gN - rM)
+        # cfirm profits 
+        pi_C = (gN * s_C * (s_C * (1 - omega - rM * nu) - (rL - rM) * (d0 + d1 * g))) / (s_C * (gN - rM) + gN * d2 * (rL - rM))
+        # cfirm debt ratio
+        d = d0 + d1 * g + d2 * (pi_C / s_C)
+        # cfirm deposit ratio
+        m_C = d + pi_C / gN - nu * s_C 
+        # kfirm deposits 
+        m_K = pi_K / gN 
+        # kfirm equity 
+        e_K = m_K 
+        # cfirm equity 
+        e_C = pi_C / gN 
+
+        # initial wages
+        init_wage = omega / (params['firm']['price'] * params['firm']['productivity'])
+        # initial cfirm debt 
+        init_cfirm_debt = (d * self.nominal_gdp[0]) / self.num_cfirms
+        # inital cfirm profits 
+        init_cfirm_profits = (pi_C * self.nominal_gdp[0]) / self.num_cfirms
+        # initial cfirm deposits 
+        init_cfirm_deposits = (m_C * self.nominal_gdp[0]) / self.num_cfirms
+        # intial cfirm equity 
+        init_cfirm_equity = (e_C * self.nominal_gdp[0]) / self.num_cfirms
+        # inital kfirm profits 
+        init_kfirm_profits = (pi_K * self.nominal_gdp[0]) / self.num_kfirms
+        # initial kfirm deposits 
+        init_kfirm_deposits = (m_K * self.nominal_gdp[0]) / self.num_kfirms
+        # intial kfirm equity 
+        init_kfirm_equity = (e_K * self.nominal_gdp[0]) / self.num_kfirms
+        # initial household deposits 
+        init_household_deposits = (m_H * self.nominal_gdp[0]) / self.num_households
+
         ### initialise agents ###
-        # initial values 
-        debt_ratio = (self.params['cfirm']['d0'] + self.params['cfirm']['d1'] * self.params['firm']['growth'] + self.params['cfirm']['d2'] * self.params['cfirm']['acceleration'] * (self.params['firm']['growth'] + self.params['firm']['depreciation'])) / (1 + self.params['cfirm']['d2'] * self.params['firm']['growth'])
-        profit_share = self.params['cfirm']['acceleration'] * (self.params['firm']['depreciation'] + self.params['firm']['growth']) - self.params['firm']['growth'] * debt_ratio
-        initial_wage = 1 - profit_share - self.params['bank']['loan_interest'] * debt_ratio
-        # initialse agent objects into lists 
-        self.cfirms:       list[ConsumptionFirm] = [ConsumptionFirm(x, self.initial_output, initial_wage, self.params) for x in range(self.num_cfirms)]
-        self.kfirms:       list[CapitalFirm] = [CapitalFirm(x, self.initial_output, initial_wage, self.params) for x in range(self.num_kfirms)]
-        self.banks:        list[Bank] = [Bank(x, self.params) for x in range(self.num_banks)]
-        self.households:   list[Household] = [Household(x, initial_wage, self.params) for x in range(self.num_households)] 
+
+        # initialse cfirms 
+        self.cfirms = [
+            ConsumptionFirm(
+                id=x, 
+                init_output=self.real_consumption[0] / self.num_cfirms, 
+                init_wage=init_wage,
+                init_profits=init_cfirm_profits,
+                init_deposits=init_cfirm_deposits,
+                init_equity=init_cfirm_equity,
+                init_debt=init_cfirm_debt,
+                params=self.params
+            ) 
+                
+            for x in range(self.num_cfirms)
+        ]
+
+        # initialise kfirms 
+        self.kfirms = [
+            CapitalFirm(
+                id=x, 
+                init_output=self.real_investment[0] / self.num_kfirms, 
+                init_wage=init_wage, 
+                init_profits=init_kfirm_profits,
+                init_deposits=init_kfirm_deposits,
+                init_equity=init_kfirm_equity,
+                params=self.params
+            )
+            
+            for x in range(self.num_kfirms)
+        ]
+
+        # initialise households
+        self.households = [
+            Household(
+                id=x, 
+                init_wage=init_wage,
+                init_deposits=init_household_deposits, 
+                params=self.params
+            ) 
+            
+            for x in range(self.num_households)
+        ]
+
+        # initialise banks
+        self.banks = [Bank(x, self.params) for x in range(self.num_banks)] 
+
         # total firms list
-        self.firms:        list[ConsumptionFirm | CapitalFirm] = self.cfirms + self.kfirms
+        self.firms: list[ConsumptionFirm | CapitalFirm] = self.cfirms + self.kfirms
+        
         # initialse firm banks and employees
         for firm in self.firms:
             firm_bank: Bank = self.banks[np.random.choice(np.arange(self.num_banks))]
@@ -652,7 +768,7 @@ class Model:
             bank.determine_equity(t)
             bank.determine_reserves(t)
             bank.determine_capital(t)
-            bank.determine_loan_interest(t)
+            bank.determine_loan_interest(self.inflation[t-1], t)
         # probabilities for firms to select a bank to request a loan from
         probabilities = self.compute_loan_probabilities(t)
         # cfirm loan request and deposits
@@ -1079,10 +1195,16 @@ class Model:
         # expected systemic loss
         self.esl[t]                     = self.compute_esl(t)
         # lagged variables
-        if t > self.steps:
-            self.cfirm_hpi[t]               = sum(abs(cfirm.market_share[t] - cfirm.market_share[t-self.steps]) for cfirm in self.cfirms)
-            self.kfirm_hpi[t]               = sum(abs(kfirm.market_share[t] - kfirm.market_share[t-self.steps]) for kfirm in self.kfirms)
-            self.bank_hpi[t]                = sum(abs(bank.market_share[t] - bank.market_share[t-self.steps]) for bank in self.banks)
+        if t < self.steps:
+            self.inflation[t]           = np.log(self.avg_cfirm_price[t]) - np.log(self.avg_cfirm_price[0])
+            self.cfirm_hpi[t]           = sum(abs(cfirm.market_share[t] - cfirm.market_share[0]) for cfirm in self.cfirms)
+            self.kfirm_hpi[t]           = sum(abs(kfirm.market_share[t] - kfirm.market_share[0]) for kfirm in self.kfirms)
+            self.bank_hpi[t]            = sum(abs(bank.market_share[t] - bank.market_share[0]) for bank in self.banks)
+        else:
+            self.inflation[t]           = np.log(self.avg_cfirm_price[t]) - np.log(self.avg_cfirm_price[t-self.steps])
+            self.cfirm_hpi[t]           = sum(abs(cfirm.market_share[t] - cfirm.market_share[t-self.steps]) for cfirm in self.cfirms)
+            self.kfirm_hpi[t]           = sum(abs(kfirm.market_share[t] - kfirm.market_share[t-self.steps]) for kfirm in self.kfirms)
+            self.bank_hpi[t]            = sum(abs(bank.market_share[t] - bank.market_share[t-self.steps]) for bank in self.banks)
     
     def step(self, t: int) -> None:
         """

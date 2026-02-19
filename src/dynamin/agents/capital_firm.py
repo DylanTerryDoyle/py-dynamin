@@ -243,7 +243,16 @@ class CapitalFirm(AbstractFirm):
         fire(self, household: Household) -> None
     """
     
-    def __init__(self, id: int, initial_output: float, initial_wage: float, params: dict) -> None:
+    def __init__(
+            self, 
+            id: int, 
+            init_output: float, 
+            init_wage: float, 
+            init_profits: float, 
+            init_deposits: float, 
+            init_equity: float,
+            params: dict
+        ) -> None:
         """
         CapitalFirm class initialisation, inherits from Firm class.
         
@@ -261,17 +270,16 @@ class CapitalFirm(AbstractFirm):
             params : dict
                 model parameters
         """
-        super().__init__(id, initial_output, initial_wage, params)
+        super().__init__(id, init_output, init_wage, init_profits, init_deposits, init_equity, params)
         # Parameters
         self.excess_output:             float = params['kfirm']['excess_output']
         # Initial values
         self.market_share[0]            = 1 / params['simulation']['num_kfirms']
-        self.desired_inventories[0]     = self.excess_output * initial_output
-        self.wage_bill[0]               = self.wage[0] * self.desired_labour[0]
-        self.profits[0]                 = initial_output - self.wage_bill[0]
-        self.profit_share[0]            = self.profits[0] / initial_output
-        self.deposits[0]                = self.profits[0]
-        self.equity[0]                  = self.deposits[0]
+        self.desired_inventories[0]     = self.excess_output * init_output
+        self.profits[0]                 = init_profits
+        self.profit_share[0]            = self.profits[0] / (init_output * params['firm']['price'])
+        self.deposits[0]                = init_deposits
+        self.equity[0]                  = init_equity
 
     def __repr__(self) -> str:
         """

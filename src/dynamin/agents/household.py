@@ -86,7 +86,7 @@ class Household:
         determine_deposits(self, t: int) -> None
     """
     
-    def __init__(self, id: int, init_wage: float, params: dict) -> None:
+    def __init__(self, id: int, init_wage: float, init_deposits: float, params: dict) -> None:
         """
         Household class initialisation.
         
@@ -120,8 +120,8 @@ class Household:
         self.desired_expenditure:   NDArray = np.zeros(shape=self.time)
         # Initial values    
         self.wage[0]                = init_wage
-        self.income[0]              = init_wage
-        self.deposits[0]            = init_wage
+        self.deposits[0]            = init_deposits
+        self.income[0]              = init_wage + self.deposit_interest * self.deposits[0]
     
     def __repr__(self) -> str:
         """

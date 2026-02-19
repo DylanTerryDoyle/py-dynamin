@@ -61,13 +61,15 @@ firms: [
   "output_growth",
   "age",
   "market_share",
-  "labour"
+  "labour",
+  "price"
 ]
 # banks variables
 banks: [
   "loans",
   "age",
-  "market_share"
+  "market_share",
+  "loan_interest"
 ]
 # households variables
 households: [
