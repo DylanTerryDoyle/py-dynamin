@@ -59,7 +59,10 @@ sim_index = np.random.randint(0, params['simulation']['num_sims'])
 print("Randomly selected simulation index for plots: ", sim_index)
 
 # database parameters 
-db_params = load_config("database.yaml")
+if is_true:
+    db_params = load_config(examples_path / example_folder / "config" / "database.yaml")
+else:
+    db_params = load_config("databse.yaml")
 
 ### SQL engine ###
 

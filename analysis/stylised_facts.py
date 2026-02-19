@@ -206,7 +206,27 @@ plt.xticks(fontsize=fontsize)
 # save figure
 plt.savefig(figure_path / 'time_series_inflation', bbox_inches='tight')
 
-### inflation ###
+### interest rate ###
+
+print("- creating plot for interest rate")
+
+# figure
+plt.figure(figsize=(x_figsize,y_figsize))
+# plot
+plt.plot(years, single_sim_data['avg_loan_interest'], color='k', linewidth=1)
+plt.axhline(0, color='k', linestyle='--', linewidth=1)
+# recession shaded
+for t in single_sim_data["time"].loc[single_sim_data['recession']==1]:
+    i = t - start
+    if i > 0 and i < len(years):
+        plt.axvspan(years[i-1], years[i], facecolor='0.2', alpha=0.25)
+# ticks
+plt.yticks(fontsize=fontsize)
+plt.xticks(fontsize=fontsize)
+# save figure
+plt.savefig(figure_path / 'time_series_interest_rate', bbox_inches='tight')
+
+### unemployment ###
 
 print("- creating plot for unemployment rate")
 
@@ -521,6 +541,7 @@ cfirms = pd.read_sql_query(
     """
         SELECT 
             T3.scenario_id,
+            T2.simulation_index,
             T1.id,
             T1.output,
             T1.output_growth,
@@ -592,7 +613,7 @@ normality_tests(cfirms["output_growth"], significance=0.01)
 plot_ccdf(cfirms['output'], figsize=(x_figsize,y_figsize), fontsize=fontsize, ylim=[0.00005,2], savefig=figure_path / "ccdf_cfirms_output.png")
 
 print("\n- C-firm Size Normality Tests:")
-normality_tests(cfirms["output"], significance=0.01)
+normality_tests(cfirms["output"].loc[cfirms["simulation_index"] == sim_index], significance=0.01)
 
 ### remove small cfirms ###
 
