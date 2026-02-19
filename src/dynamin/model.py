@@ -15,9 +15,6 @@ from dynamin.agents.consumption_firm import ConsumptionFirm
 ### import data collector ###
 from dynamin.data_collector import DataCollector
 
-### import balanced growth path (BGP) model ###
-from dynamin.bgp_model import balanced_growth_solution
-
 ### Model Class ###
 class Model:
     
