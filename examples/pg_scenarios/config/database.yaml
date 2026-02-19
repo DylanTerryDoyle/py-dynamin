@@ -15,7 +15,7 @@
 ### database parameters ###
 
 # name of database
-database_name: "py-dynamin"
+database_name: "pg-dynamin"
 # user: default set to postgres, change to user for limited permissions
 user: "postgres"
 # password for the database
