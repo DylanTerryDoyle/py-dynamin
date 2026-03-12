@@ -1,12 +1,13 @@
+import warnings
 import numpy as np
 import pandas as pd
 import powerlaw as pl
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
 from scipy import stats
 from pathlib import Path
 from sqlalchemy import Engine
+from statsmodels.tsa.statespace.varmax import VARMAX
 
 def load_scenarios(engine: Engine) -> pd.DataFrame:
     """
@@ -51,122 +52,183 @@ def load_macro_data(engine: Engine, scenario_id: int, params: dict):
     )
     ### define new time series ###
     # year
-    data['year'] = (data['time'] // steps).astype(int)
+    data["year"] = (data["time"] // steps).astype(int)
+    # turn real_gdp from quarterly to annual
+    data["real_gdp"] = data.groupby("simulation_id")["real_gdp"].transform(lambda x: x.rolling(window=steps).sum())
+    # turn nominal_gdp from quarterly to annual
+    data["nominal_gdp"] = data.groupby("simulation_id")["nominal_gdp"].transform(lambda x: x.rolling(window=steps).sum())
     # real gdp growth 
-    data['rgdp_growth'] = (data.groupby('simulation_id')['real_gdp'].transform(lambda x: np.log(x) - np.log(x.shift(steps))))
+    data["rgdp_growth"] = data.groupby("simulation_id")["real_gdp"].transform(lambda x: np.log(x) - np.log(x.shift(steps)))
     # standardised real gdp growth 
-    data['std_rgdp_growth'] = (data.groupby('simulation_id')['rgdp_growth'].transform(lambda x: (x - x.mean()) / x.std()))
+    data["std_rgdp_growth"] = data.groupby("simulation_id")["rgdp_growth"].transform(lambda x: (x - x.mean()) / x.std())
+    # turn real_consumption from quarterly to annual
+    data["real_consumption"] = data.groupby("simulation_id")["real_consumption"].transform(lambda x: x.rolling(window=steps).sum())
     # consumption growth 
-    data['consumption_growth'] = (data.groupby('simulation_id')['real_consumption'].transform(lambda x: np.log(x) - np.log(x.shift(steps))))
+    data["consumption_growth"] = data.groupby("simulation_id")["real_consumption"].transform(lambda x: np.log(x) - np.log(x.shift(steps)))
+    # turn real_investment from quarterly to annual
+    data["real_investment"] = data.groupby("simulation_id")["real_investment"].transform(lambda x: x.rolling(window=steps).sum())
     # investment growth 
-    data['investment_growth'] = (data.groupby('simulation_id')['real_investment'].transform(lambda x: np.log(x) - np.log(x.shift(steps))))
+    data["investment_growth"] = data.groupby("simulation_id")["real_investment"].transform(lambda x: np.log(x) - np.log(x.shift(steps)))
     # price index (cfirms)
-    data['price_index'] = data['nominal_consumption'] / data['real_consumption']
+    data["price_index"] = data["nominal_consumption"] / data["real_consumption"]
     # inflation
-    data['inflation'] = (data.groupby('simulation_id')['price_index'].transform(lambda x: np.log(x) - np.log(x.shift(steps))))
-    # wage index 
-    data['wage_index'] = data['wages'] / data['employment']
+    data["inflation"] = data.groupby("simulation_id")["price_index"].transform(lambda x: np.log(x) - np.log(x.shift(steps)))
+    # turn wages from quarterly to annual 
+    data["wages"] = data.groupby("simulation_id")["wages"].transform(lambda x: x.rolling(window=steps).sum())
     # wage inflation
-    data['wage_inflation'] = (data.groupby('simulation_id')['wage_index'].transform(lambda x: np.log(x) - np.log(x.shift(steps))))
+    data["wage_inflation"] = data.groupby("simulation_id")["wages"].transform(lambda x: np.log(x) - np.log(x.shift(steps)))
     # ESL / nGDP
-    data['esl_gdp'] = data['esl'] / data['nominal_gdp']
+    data["esl_gdp"] = data["esl"] / data["nominal_gdp"]
     # debt ratio
-    data['debt_ratio'] = data['debt'] / data['nominal_gdp']
+    data["debt_ratio"] = data["debt"] / data["nominal_gdp"]
     # wage share
-    data['wage_share'] = data['wages'] / data['nominal_gdp']
+    data["wage_share"] = data["wages"] / data["nominal_gdp"]
+    # turn profits from quarterly to annual 
+    data["profits"] = data.groupby("simulation_id")["profits"].transform(lambda x: x.rolling(window=steps).sum())
     # profit share
-    data['profit_share'] = data['profits'] / data['nominal_gdp']
+    data["profit_share"] = data["profits"] / data["nominal_gdp"]
+    # productivity level
+    data["productivity_level"] = data["real_gdp"] / data["employment"]
     # normalised productivity to start date
-    data['productivity'] = (data['real_gdp'] / data['employment']) / (data['real_gdp'][start] / data['employment'][start])
+    data["productivity"] = data.groupby("simulation_id")["productivity_level"].transform(lambda x: x / x.iloc[start])
     # productivity growth
-    data['productivity_growth'] = (data.groupby('simulation_id')['productivity'].transform(lambda x: np.log(x) - np.log(x.shift(steps))))
+    data["productivity_growth"] = data.groupby("simulation_id")["productivity"].transform(lambda x: np.log(x) - np.log(x.shift(steps)))
     # credit: credit (change in debt) as a percentage of GDP
-    data['credit_gdp'] = (data.groupby('simulation_id')['debt'].transform(lambda x: x - x.shift(steps)) / data['nominal_gdp'])
+    data["credit_gdp"] = data.groupby("simulation_id")["debt"].transform(lambda x: x - x.shift(steps)) / data["nominal_gdp"]
+    # debt growth (log difference)
+    data["debt_growth"] = data.groupby("simulation_id")["debt"].transform(lambda x: np.log(x) - np.log(x.shift(steps)))
     # change unemployment
-    data['change_unemployment'] = data['unemployment_rate'] - data['unemployment_rate'].shift(steps)
+    data["change_unemployment"] = data.groupby("simulation_id")["unemployment_rate"].transform(lambda x: x - x.shift(steps))
     
-    ### probability of at least one crisis in a given year ###
-    # 1. Crisis flag per quarter
-    data['crises'] = (data['rgdp_growth'] < -0.03).astype(int)
-
-    # 2. Crisis probability PER YEAR (across simulations) - ONE LINE
-    yearly_crisis_prob = (
-        data.groupby(['year', 'simulation_id'])['crises']
-        .max()  # any crisis that year?
-        .groupby('year')
-        .mean()  # % simulations with crisis
-        .reset_index(name='yearly_crisis_prob')
-    )
-
-    # 3. Merge back to main data
-    data = data.merge(yearly_crisis_prob, on='year', how='left')
-    
-    # quarterly default probability
-    data['cfirm_probability_default'] = data['cfirm_defaults'] / params['simulation']['num_cfirms']
-    data['kfirm_probability_default'] = data['kfirm_defaults'] / params['simulation']['num_kfirms']
-    data['bank_probability_default']  = data['bank_defaults']  / params['simulation']['num_banks']
-    
-    # average per year default probability, per simulation, split by crisis 
-    yearly_probs = (
-        data.groupby(['simulation_id','year','crises'])[['cfirm_probability_default','kfirm_probability_default','bank_probability_default']]
-        .mean()
-        .reset_index()
-    )
-    
-    # average across years within each simulation, conditional on there being a crisis
-    cond_probs = (
-        yearly_probs.groupby(['simulation_id','crises'])[['cfirm_probability_default','kfirm_probability_default','bank_probability_default']]
-        .mean()
-        .reset_index()
-    )
-
-    # Pivot to get separate columns for crisis=1 (true) and crisis=0 (false)
-    cond_probs = cond_probs.pivot(index='simulation_id', columns='crises')
-    cond_probs.columns = [f"{var}_crisis{c}" for var,c in cond_probs.columns]
-    cond_probs = cond_probs.reset_index()
-
-    # merge back into main data so each row has the conditional averages
-    data = data.merge(cond_probs, on='simulation_id', how='left')
-        
-    # recession indicator 
+    ### recession indicator ###
     # 1. negative GDP growth indicator
-    data['neg_rgdp'] = (data['rgdp_growth'] < 0).astype(int)
-
+    data["neg_rgdp"] = (data["rgdp_growth"] < 0).astype(int)
     # 2. identify consecutive spells (per simulation)
-    data['neg_spell'] = (
-        data.groupby('simulation_id')['neg_rgdp']
-        .transform(lambda x: (x != x.shift()).cumsum())
-    )
-
+    data["neg_spell"] = (data.groupby("simulation_id")["neg_rgdp"].transform(lambda x: (x != x.shift()).cumsum()))
     # 3. spell lengths
-    spell_lengths = (
-        data[data['neg_rgdp'] == 1]
-        .groupby(['simulation_id', 'neg_spell'])
-        .size()
-        .reset_index(name='spell_length')
-    )
-
+    spell_lengths = (data[data["neg_rgdp"] == 1].groupby(["simulation_id", "neg_spell"]).size().reset_index(name="spell_length"))
     # 4. keep only spells with length >= 3
-    valid_spells = spell_lengths[spell_lengths['spell_length'] >= 2]
-
-    # 5. merge back
-    data = data.merge(
-        valid_spells[['simulation_id', 'neg_spell']],
-        on=['simulation_id', 'neg_spell'],
-        how='left',
-        indicator=True
-    )
-
-    # 6. recession indicator
-    data['recession'] = (data['_merge'] == 'both').astype(int)
-
+    valid_spells = spell_lengths[spell_lengths["spell_length"] >= 2]
+    # merge back
+    data = data.merge(valid_spells[["simulation_id", "neg_spell"]],on=["simulation_id", "neg_spell"],how="left",indicator=True)
+    # recession indicator
+    data["recession"] = (data["_merge"] == "both").astype(int)
     # cleanup
-    data.drop(columns=['neg_rgdp', 'neg_spell', '_merge'], inplace=True)
+    data.drop(columns=["neg_rgdp", "neg_spell", "_merge"], inplace=True)
+
+    ### crisis frequency (annual) ###
+    # 1. Crisis flag per period
+    data["crises"] = (data["rgdp_growth"] < -0.03).astype(int)
+    # 2. Crisis occurrence per year per simulation
+    yearly_crisis = (data.groupby(["simulation_id", "year"])["crises"].max().reset_index(name="year_crisis"))
+    # 3. Crisis probability per simulation
+    crisis_prob_sim = (yearly_crisis.groupby("simulation_id")["year_crisis"].mean().reset_index(name="crisis_probability"))
+    # merge back
+    data = data.merge(crisis_prob_sim, on="simulation_id", how="left")
     
+    ### crisis severity (cumulative shortfall) ###
+    # 1. Identify crisis spells
+    data["crisis_spell"] = (data.groupby("simulation_id")["crises"].transform(lambda x: (x != x.shift()).cumsum()))
+    # 2. Compute shortfall below -3%
+    data["growth_shortfall"] = np.where(data["crises"] == 1,-0.03 - data["rgdp_growth"],0)
+    # 3. Sum shortfall within each crisis spell
+    crisis_severity = (data[data["crises"] == 1].groupby(["simulation_id", "crisis_spell"])["growth_shortfall"].sum().reset_index(name="crisis_severity"))
+    # 4. Average severity per simulation
+    severity_sim = (crisis_severity.groupby("simulation_id")["crisis_severity"].mean().reset_index())
+    # merge back
+    data = data.merge(severity_sim, on="simulation_id", how="left")
+
+    ### tail risk (VaR & ES of std real growth growth rates) ###
+    # tail
+    alpha = 0.05
+    # 1. compute value at risk (VaR 5% quantile) per simulation
+    var_df = (data.groupby("simulation_id")["std_rgdp_growth"].quantile(alpha).reset_index(name="value_at_risk"))
+    # merge back for ES calculation
+    data = data.merge(var_df, on="simulation_id", how="left")
+
+    # 2. compute expected shortfall (ES => mean below VaR)
+    es_df = (data[data["std_rgdp_growth"] <= data["value_at_risk"]].groupby("simulation_id")["std_rgdp_growth"].mean().reset_index(name="expected_shortfall"))
+    # merge back
+    data = data.merge(es_df, on="simulation_id", how="left")
+
+    # make VaR & ES positive 
+    data["value_at_risk"] = -data["value_at_risk"]
+    data["expected_shortfall"] = -data["expected_shortfall"]
+
     # drop transient data
-    data = data.loc[data['time'] > start * steps]
+    data = data.loc[data["time"] > start * steps]
     # reset index
     data.reset_index(inplace=True, drop=True)
+    return data
+
+def load_micro_data(engine: Engine, scenario_id: int, params: dict):
+    """Load macro_data table from the SQL database into a pandas DataFrame and calculate variables."""
+    start = params["simulation"]["start"]
+    steps = params["simulation"]["steps"]
+    # load table into pandas DataFrame
+    data = pd.read_sql_query(
+        """
+            SELECT T3.scenario_id, T2.simulation_index, T1.* 
+            
+            FROM macro_data AS T1
+            
+            -- join simulations and scenarios to get scenario id
+            JOIN simulations AS T2 ON T2.simulation_id = T1.simulation_id
+            JOIN scenarios AS T3 ON T3.scenario_id = T2.scenario_id
+            
+            -- filter by scenario_id
+            WHERE T3.scenario_id = %(scenario_id)s
+            
+            -- order by scenario, simulation, time
+            ORDER BY T3.scenario_index, T2.simulation_index, T1.time ASC
+            ;
+        """,
+        engine,
+        params={
+            "scenario_id": scenario_id
+        }
+    ) 
+    ### define new time series ###
+    # year
+    data["year"] = (data["time"] // steps).astype(int)
+    # turn real_gdp from quarterly to annual
+    data["real_gdp"] = data.groupby("simulation_id")["real_gdp"].transform(lambda x: x.rolling(window=steps).sum())
+    # turn nominal_gdp from quarterly to annual
+    data["nominal_gdp"] = data.groupby("simulation_id")["nominal_gdp"].transform(lambda x: x.rolling(window=steps).sum())
+    # ESL / nGDP
+    data["esl_gdp"] = data["esl"] / data["nominal_gdp"]
+    # real gdp growth 
+    data["rgdp_growth"] = (data.groupby("simulation_id")["real_gdp"].transform(lambda x: np.log(x) - np.log(x.shift(steps))))
+    # crisis flag per period
+    data["crises"] = (data["rgdp_growth"] < -0.03).astype(int)
+    ### bankruptcy probability conditioned on crisis ###
+    # 1. quarterly default probability
+    data["cfirm_probability_default"] = data["cfirm_defaults"] / params["simulation"]["num_cfirms"]
+    data["kfirm_probability_default"] = data["kfirm_defaults"] / params["simulation"]["num_kfirms"]
+    data["bank_probability_default"]  = data["bank_defaults"]  / params["simulation"]["num_banks"]
+    # 2. average per year default probability, per simulation, split by crisis 
+    yearly_probs = (data.groupby(["simulation_id","year","crises"])[["cfirm_probability_default","kfirm_probability_default","bank_probability_default"]].mean().reset_index())
+    # 3. average across years within each simulation, conditional on there being a crisis
+    cond_probs = (yearly_probs.groupby(["simulation_id","crises"])[["cfirm_probability_default","kfirm_probability_default","bank_probability_default"]].mean().reset_index())
+    # 4. pivot to get separate columns for crisis=1 (true) and crisis=0 (false)
+    cond_probs = cond_probs.pivot(index=["simulation_id"], columns="crises")
+    cond_probs.columns = [f"{var}_crises{c}" for var,c in cond_probs.columns]
+    cond_probs = cond_probs.reset_index()
+    # merge back
+    data = data.merge(cond_probs, on=["simulation_id"], how="left")
+    # crisis = 1 values only in crisis periods
+    data["cfirm_probability_default_crises1"] = np.where(data["crises"] == 1, data["cfirm_probability_default_crises1"], np.nan)
+    data["kfirm_probability_default_crises1"] = np.where(data["crises"] == 1, data["kfirm_probability_default_crises1"], np.nan)
+    data["bank_probability_default_crises1"] = np.where(data["crises"] == 1, data["bank_probability_default_crises1"], np.nan)
+    # crisis = 0 values only in non-crisis periods
+    data["cfirm_probability_default_crises0"] = np.where(data["crises"] == 0, data["cfirm_probability_default_crises0"], np.nan)
+    data["kfirm_probability_default_crises0"] = np.where(data["crises"] == 0, data["kfirm_probability_default_crises0"], np.nan)
+    data["bank_probability_default_crises0"] = np.where(data["crises"] == 0, data["bank_probability_default_crises0"], np.nan)
+    # drop transient data
+    data = data.loc[data["time"] > start * steps]
+    # reset index
+    data.reset_index(inplace=True, drop=True)
+
     return data
 
 def box_plot_scenarios(
@@ -189,24 +251,20 @@ def box_plot_scenarios(
     plot_data = plot_data.copy()
     # get all values across scenarios for variable
     for scenario in plot_data.keys():
-        plot_data[scenario] = plot_data[scenario][variable].to_numpy().ravel()
+        vals = plot_data[scenario][variable].dropna()
+        plot_data[scenario] = vals.to_numpy().ravel()
     
     ### box plot ###
     plt.figure(figsize=figsize)
-    bplot = plt.boxplot(plot_data.values(), patch_artist=True, showfliers=False, medianprops=dict(color='black', linewidth=2), whis=whis)
+    bplot = plt.boxplot(plot_data.values(), patch_artist=True, showfliers=False, medianprops=dict(color="black", linewidth=2), whis=whis)
     
     ### set box colour ###
     if colours:
-        for patch, color in zip(bplot['boxes'], colours):
+        for patch, color in zip(bplot["boxes"], colours):
             patch.set_facecolor(color)
             patch.set_alpha(0.5)
             
     ### figure settings ###
-    # decimal places 
-    if yticks is not None:
-        plt.yticks(yticks, [f"{y:.{dp}f}" for y in yticks], fontsize=fontsize)
-    else:
-        plt.gca().yaxis.set_major_formatter(mticker.FormatStrFormatter(f'%.{dp}f'))
     # y axis ticks
     plt.yticks(yticks, fontsize=fontsize)
     # y axis limits
@@ -214,39 +272,40 @@ def box_plot_scenarios(
     # x axis ticks
     plt.xticks(xticks, xlabels, fontsize=fontsize)
     # save figure
-    plt.savefig(figure_path / f"box_plot_{variable}", bbox_inches='tight')
+    plt.savefig(figure_path / f"box_plot_{variable}", bbox_inches="tight")
     
 def normality_tests(data: pd.Series, significance: float=0.01):
-    # Kolmogorov-Smirnov Test for Nomaliy
-    ks_result = stats.kstest(data, 'norm')
-    # print test outcome
-    print('\n- Kolmogorov-Smirnov Test')
-    if ks_result.pvalue < significance:
-        print(f"  - Reject null hypothesis => not normally distributed ({significance*100}% significance level)")
-    else:
-        print(f"  - Accept null hypothesis => normally distributed ({significance*100}% significance level)")
-    # print results
-    print(f'  - Resutls:')
-    print(f'    - test stat = {round(ks_result.statistic, 3)}')
-    print(f'    - p-value = {round(ks_result.pvalue, 3)}')
+    # ignore scipy warnings 
+    warnings.filterwarnings("ignore")
 
+    # Kolmogorov-Smirnov Test for Nomaliy
+    ks_result = stats.kstest(data, "norm")
+    # print test outcome
+    print("  - Kolmogorov-Smirnov Test")
+    if ks_result.pvalue < significance:
+        print(f"    - Reject null hypothesis => not normally distributed ({significance*100}% significance level)")
+    else:
+        print(f"    - Accept null hypothesis => normally distributed ({significance*100}% significance level)")
+    # print results
+    print("    - Resutls:")
+    print(f"      - test stat = {round(ks_result.statistic, 3)}")
+    print(f"      - p-value = {round(ks_result.pvalue, 3)}")
 
     # Shapiro-Wilk Test for Nomaliy
     sw_result = stats.shapiro(data)
     # print test outcome
-    print('\n- Shapiro-Wilk Test')
+    print("  - Shapiro-Wilk Test")
     if sw_result.pvalue < significance:
-        print(f"  - Reject null hypothesis => not normally distributed ({significance*100}% significance level)")
+        print(f"    - Reject null hypothesis => not normally distributed ({significance*100}% significance level)")
     else:
-        print(f"  - Accept null hypothesis => normally distributed ({significance*100}% significance level)")
+        print(f"    - Accept null hypothesis => normally distributed ({significance*100}% significance level)")
     # print results
-    print(f'  - Results:')
-    print(f'    - test stat = {round(sw_result.statistic, 3)}')
-    print(f'    - p-value = {round(sw_result.pvalue, 3)}')
-
+    print("    - Results:")
+    print(f"      - test stat = {round(sw_result.statistic, 3)}")
+    print(f"      - p-value = {round(sw_result.pvalue, 3)}")
 
     # Anderson-Darling Test for Nomaliy
-    ad_result = stats.anderson(data, 'norm')
+    ad_result = stats.anderson(data, "norm")
     # AD p-value
     if ad_result.statistic >= .6:
         ad_pvalue = np.exp(1.2937 - 5.709*ad_result.statistic - .0186*(ad_result.statistic**2))
@@ -257,15 +316,15 @@ def normality_tests(data: pd.Series, significance: float=0.01):
     else:
         ad_pvalue = 1 - np.exp(-13.436 + 101.14*ad_result.statistic - 223.73*(ad_result.statistic**2))
     # print test outcome
-    print('\n- Anderson-Darling Test')
+    print("  - Anderson-Darling Test")
     # print results
     if ad_pvalue < significance:
-        print(f"  - Reject null hypothesis => not normally distributed ({significance*100}% significance level)")
+        print(f"    - Reject null hypothesis => not normally distributed ({significance*100}% significance level)")
     else:
-        print(f"  - Accept null hypothesis => normally distributed ({significance*100}% significance level)")
-    print("  - Results:")
-    print(f"    - test stat = {round(ad_result.statistic, 3)}")
-    print(f"    - p-value = {round(ad_pvalue, 3)}")
+        print(f"    - Accept null hypothesis => normally distributed ({significance*100}% significance level)")
+    print("    - Results:")
+    print(f"      - test stat = {round(ad_result.statistic, 3)}")
+    print(f"      - p-value = {round(ad_pvalue, 3)}")
 
 def plot_autocorrelation(
     simulated: np.typing.ArrayLike, 
@@ -329,21 +388,21 @@ def plot_autocorrelation(
     # x values (lags)
     x = np.arange(0, lags+1)
     # plot empirical autocorrelation 
-    plt.plot(emp_autocorr, color='k', linestyle='--', linewidth=1, label='Empirical')
+    plt.plot(emp_autocorr, color="k", linestyle="--", linewidth=1, label="Empirical")
     # plot simulated autocorrelation median
-    plt.plot(sim_autocorr_median, color='k', linewidth=1, label='Simulated')
+    plt.plot(sim_autocorr_median, color="k", linewidth=1, label="Simulated")
     # plot confidence interval
-    plt.fill_between(x, sim_autocorr_median, sim_autocorr_upper, color='grey', alpha=0.2, label='95% CI')
-    plt.fill_between(x, sim_autocorr_median, sim_autocorr_lower, color='grey', alpha=0.2)
+    plt.fill_between(x, sim_autocorr_median, sim_autocorr_upper, color="grey", alpha=0.2, label="95% CI")
+    plt.fill_between(x, sim_autocorr_median, sim_autocorr_lower, color="grey", alpha=0.2)
     # plot 0 line
-    plt.axhline(0, color='k')
+    plt.axhline(0, color="k")
     # figure ticks
-    plt.yticks([1.00,0.75,0.50,0.25,0.00,-0.25,-0.50,-0.75,-1.00], ['1.00','0.75','0.50','0.25','0.00','–0.25','–0.50','–0.75','–1.00'], fontsize=fontsize)
+    plt.yticks([1.00,0.75,0.50,0.25,0.00,-0.25,-0.50,-0.75,-1.00], ["1.00","0.75","0.50","0.25","0.00","–0.25","–0.50","–0.75","–1.00"], fontsize=fontsize)
     plt.xticks([0,5,10,15,20], [0,5,10,15,20], fontsize=fontsize)
     # legend
-    plt.legend(fontsize=fontsize, loc='upper right')
+    plt.legend(fontsize=fontsize, loc="upper right")
     # save figure
-    plt.savefig(savefig, bbox_inches='tight')
+    plt.savefig(savefig, bbox_inches="tight")
     plt.close()
 
 def plot_cross_correlation(
@@ -418,21 +477,21 @@ def plot_cross_correlation(
     # x values (lags)
     x = np.arange(0, lags*2 + 1)
     # plot empirical xcorr
-    plt.plot(emp_xcorr, color='k', linestyle='--', linewidth=1, label='Empirical')
+    plt.plot(emp_xcorr, color="k", linestyle="--", linewidth=1, label="Empirical")
     # plot median simulated xcorr
-    plt.plot(sim_xcorr_median, color='k', linewidth=1, label='Simulated')
+    plt.plot(sim_xcorr_median, color="k", linewidth=1, label="Simulated")
     # plot confidence interval
-    plt.fill_between(x, sim_xcorr_median, sim_xcorr_upper, color='grey', alpha=0.2, label='95% CI')
-    plt.fill_between(x, sim_xcorr_median, sim_xcorr_lower, color='grey', alpha=0.2)
+    plt.fill_between(x, sim_xcorr_median, sim_xcorr_upper, color="grey", alpha=0.2, label="95% CI")
+    plt.fill_between(x, sim_xcorr_median, sim_xcorr_lower, color="grey", alpha=0.2)
     # plot 0 line
-    plt.axhline(0, color='k')
+    plt.axhline(0, color="k")
     # figure ticks
-    plt.yticks([1.00,0.75,0.50,0.25,0.00,-0.25,-0.50,-0.75,-1.00], ['1.00','0.75','0.50','0.25','0.00','–0.25','–0.50','–0.75','–1.00'], fontsize=fontsize)
-    plt.xticks([0,int(0.5*lags),int(lags),int(1.5*lags),int(2*lags)], [f'–{lags}',f'–{int(0.5*lags)}',0,int(0.5*lags),lags], fontsize=fontsize)
+    plt.yticks([1.00,0.75,0.50,0.25,0.00,-0.25,-0.50,-0.75,-1.00], ["1.00","0.75","0.50","0.25","0.00","–0.25","–0.50","–0.75","–1.00"], fontsize=fontsize)
+    plt.xticks([0,int(0.5*lags),int(lags),int(1.5*lags),int(2*lags)], [f"–{lags}",f"–{int(0.5*lags)}",0,int(0.5*lags),lags], fontsize=fontsize)
     # legend
-    plt.legend(fontsize=fontsize, loc='upper right')
+    plt.legend(fontsize=fontsize, loc="upper right")
     # save figure
-    plt.savefig(savefig, bbox_inches='tight')
+    plt.savefig(savefig, bbox_inches="tight")
     plt.close()
 
 def plot_ccdf(
@@ -531,3 +590,135 @@ def plot_ccdf(
     # --- diagnostics ---
     print(f" - Power-law exponent (alpha) = {alpha:.4f}")
     print(f" - Power-law xmin = {xmin:.4f}\n")
+
+def annualise_macro_data(data: pd.DataFrame, steps: int) -> pd.DataFrame:
+    """
+    Convert quarterly simulation data to annual frequency.
+
+    Assumes:
+    - real_gdp and real_investment are quarterly flows
+    - debt is end-of-quarter stock
+    """
+
+    # Annual GDP and investment = sum of quarters
+    annual_flows = data.groupby(["simulation_id", "year"]).agg(
+        {
+            "real_gdp": "sum",
+            "real_investment": "sum"
+        }
+    )
+
+    # Annual debt = end-of-year (last quarter)
+    annual_debt = (
+        data
+        .sort_values(["simulation_id", "year", "time"])
+        .groupby(["simulation_id", "year"])
+        .tail(1)
+        .set_index(["simulation_id", "year"])["debt"]
+    )
+
+    annual = annual_flows.join(annual_debt).reset_index()
+
+    # Compute annual log growth
+    annual["rgdp_growth"] = annual.groupby("simulation_id")["real_gdp"].transform(lambda x: np.log(x) - np.log(x.shift(1)))
+
+    annual["investment_growth"] = (
+        annual.groupby("simulation_id")["real_investment"]
+        .transform(lambda x: np.log(x) - np.log(x.shift(1)))
+    )
+
+    annual["debt_growth"] = (
+        annual.groupby("simulation_id")["debt"]
+        .transform(lambda x: np.log(x) - np.log(x.shift(1)))
+    )
+
+    return annual.dropna()
+
+def minksy_cycle_test(data: pd.DataFrame, min_obs: int = 10, require_stable: bool = True):
+
+    # supress statsmodels warnings 
+    warnings.filterwarnings("ignore", module="statsmodels")
+
+    results_list = []
+    total_sims = 0
+    converged_sims = 0
+    stable_sims = 0
+
+    for sim_id, df in data.groupby("simulation_id"):
+
+        total_sims += 1
+
+        df = df[["rgdp_growth", "debt_growth"]].dropna()
+
+        if len(df) < min_obs:
+            continue
+
+        df = df.reset_index(drop=True)
+
+        try:
+            model = VARMAX(df, order=(1, 1), trend='c')
+            res = model.fit(method='lbfgs', disp=False)
+        except Exception:
+            continue
+
+        # if not res.mle_retvals.get("converged", False):
+        #     continue
+
+        converged_sims += 1
+
+        # ---- Extract AR(1) matrix correctly ----
+        B = res.coefficient_matrices_var[0]
+
+        beta11, beta12 = B[0]
+        beta21, beta22 = B[1]
+
+        # Necessary Minsky cross-effects
+        necessary = (beta12 < 0) and (beta21 > 0)
+
+        # Trace / determinant conditions
+        trace = np.trace(B)
+        det = np.linalg.det(B)
+        discriminant = trace**2 - 4 * det
+
+        complex_ev = discriminant < 0
+
+        # Eigenvalues
+        eigenvalues = np.linalg.eigvals(B)
+        ev1, ev2 = eigenvalues
+
+        # structural definition of minskyan cycle (stockhammer & Gouzoulis, 2023)
+        minsky = necessary and complex_ev
+
+        # complex eigenvalues
+        is_complex = np.iscomplex(eigenvalues).any()
+        
+        results_list.append({
+            "simulation_id": sim_id,
+            "beta12": beta12,
+            "beta21": beta21,
+            "necessary": necessary,
+            "complex_ev": complex_ev,
+            "discriminant": discriminant,
+            "minsky_cycle": minsky,
+            "ev1": ev1,
+            "ev2": ev2,
+            "complex_pair": is_complex
+        })
+
+    results_df = pd.DataFrame(results_list)
+
+    if len(results_df) == 0:
+        raise ValueError("No valid VARMA estimations.")
+
+    summary = pd.DataFrame([{
+        "total_simulations": total_sims,
+        "converged_simulations": converged_sims,
+        "stable_simulations": stable_sims if require_stable else np.nan,
+        "share_necessary": results_df["necessary"].mean(),
+        "share_complex": results_df["complex_ev"].mean(),
+        "share_minsky": results_df["minsky_cycle"].mean(),
+        "mean_beta12": results_df["beta12"].mean(),
+        "mean_beta21": results_df["beta21"].mean()
+    }])
+
+    return results_df, summary
