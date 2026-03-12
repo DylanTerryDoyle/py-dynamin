@@ -77,7 +77,7 @@ class DataCollector:
             print(f"Error creating database '{database_name}': {e}")
 
         finally:
-            if 'temp_connection' in locals() and temp_connection:
+            if "temp_connection" in locals() and temp_connection:
                 temp_connection.close()
 
     def drop_database(self, database_name: str):
