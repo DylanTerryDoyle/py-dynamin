@@ -276,20 +276,20 @@ class AbstractFirm(ABC):
         """
         # Parameters
         self.id:                        int   = id
-        self.steps:                     int   = params['simulation']['steps']
-        self.time:                      int   = (params['simulation']['years'] + params['simulation']['start']) * self.steps + 1
+        self.steps:                     int   = params["simulation"]["steps"]
+        self.time:                      int   = (params["simulation"]["years"] + params["simulation"]["start"]) * self.steps + 1
         self.dt:                        float = 1 / self.steps
-        self.adapt:                     float = params['firm']['adapt'] * self.dt
-        self.adjust:                    float = params['firm']['adjust'] * self.dt
-        self.growth:                    float = params['firm']['growth'] * self.dt
-        self.sigma:                     float = params['firm']['sigma'] * np.sqrt(self.dt)
-        self.sigma_p:                   float = params['firm']['sigma_p'] * np.sqrt(self.dt)
-        self.sigma_w:                   float = params['firm']['sigma_w'] * np.sqrt(self.dt)
-        self.depreciation:              float = params['firm']['depreciation'] * self.dt
-        self.wage_buffer:               float = params['firm']['wage_buffer']
-        self.num_banks:                 int   = params['firm']['num_banks']
-        self.deposit_interest:          float = params['bank']['deposit_interest'] * self.dt
-        self.loan_periods:              int   = params['bank']['loan_years'] * self.steps
+        self.adapt:                     float = params["firm"]["adapt"] * self.dt
+        self.adjust:                    float = params["firm"]["adjust"] * self.dt
+        self.growth:                    float = params["firm"]["growth"] * self.dt
+        self.sigma:                     float = params["firm"]["sigma"] * np.sqrt(self.dt)
+        self.sigma_p:                   float = params["firm"]["sigma_p"] * np.sqrt(self.dt)
+        self.sigma_w:                   float = params["firm"]["sigma_w"] * np.sqrt(self.dt)
+        self.depreciation:              float = params["firm"]["depreciation"] * self.dt
+        self.wage_buffer:               float = params["firm"]["wage_buffer"]
+        self.num_banks:                 int   = params["firm"]["num_banks"]
+        self.deposit_interest:          float = params["bank"]["deposit_interest"] * self.dt
+        self.loan_periods:              int   = params["bank"]["loan_years"] * self.steps
         self.repayment_rate:            float = 1 / self.loan_periods
         self.bankrupt:                  bool  = False
         # Mutable Data      
@@ -338,10 +338,10 @@ class AbstractFirm(ABC):
         self.desired_output[0]          = init_output
         self.demand[0]                  = init_output
         self.expected_demand[0]         = init_output
-        self.productivity[0]            = params['firm']['productivity']
-        self.expected_productivity[0]   = params['firm']['productivity']
+        self.productivity[0]            = params["firm"]["productivity"]
+        self.expected_productivity[0]   = params["firm"]["productivity"]
         self.desired_labour[0]          = init_output / self.productivity[0]
-        self.price[0]                   = params['firm']['price']
+        self.price[0]                   = params["firm"]["price"]
         self.wage[0]                    = init_wage
         self.bank_ids[:]                = np.nan
 

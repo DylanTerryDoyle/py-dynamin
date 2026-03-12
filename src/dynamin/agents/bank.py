@@ -138,7 +138,7 @@ class Bank:
         
         determine_market_share(self, total_loans: float, t: int) -> None
         
-        compute_loan_supply(self, firm: 'Firm', t: int) -> float
+        compute_loan_supply(self, firm: "Firm", t: int) -> float
         
         compute_total_loan_interest(self) -> float
         
@@ -152,13 +152,13 @@ class Bank:
         
         remove_household(self, household: 'Household') -> None
         
-        add_deposit_firm(self, firm: 'Firm | ConsumptionFirm | CapitalFirm') -> None
+        add_deposit_firm(self, firm: "Firm | ConsumptionFirm | CapitalFirm") -> None
         
-        remove_deposit_firm(self, firm: 'Firm | ConsumptionFirm | CapitalFirm') -> None
+        remove_deposit_firm(self, firm: "Firm | ConsumptionFirm | CapitalFirm") -> None
         
-        add_loan_firm(self, firm: 'Firm | ConsumptionFirm | CapitalFirm') -> None
+        add_loan_firm(self, firm: "Firm | ConsumptionFirm | CapitalFirm") -> None
         
-        remove_loan_firm(self, firm: 'Firm | ConsumptionFirm | CapitalFirm') -> None
+        remove_loan_firm(self, firm: "Firm | ConsumptionFirm | CapitalFirm") -> None
         
         update_loan_firms(self, firms: list['ConsumptionFirm | CapitalFirm']) -> None
     """
@@ -176,15 +176,15 @@ class Bank:
         """
         # Parameters
         self.id:                        int   = id
-        self.steps:                     int   = params['simulation']['steps']
-        self.time:                      int   = (params['simulation']['years'] + params['simulation']['start']) * self.steps + 1
+        self.steps:                     int   = params["simulation"]["steps"]
+        self.time:                      int   = (params["simulation"]["years"] + params["simulation"]["start"]) * self.steps + 1
         self.dt:                        float = 1 / self.steps
-        self.adjust:                    float = params['bank']['adjust'] * self.dt
-        self.deposit_interest:          float = params['bank']['deposit_interest'] * self.dt
-        self.natural_interest:          float = params['bank']['loan_interest']
-        self.sigma:                     float = params['bank']['sigma'] * np.sqrt(self.dt)
-        self.loan_periods:              int   = params['bank']['loan_years'] * self.steps
-        self.min_capital_ratio:         float = params['bank']['min_capital_ratio']
+        self.adjust:                    float = params["bank"]["adjust"] * self.dt
+        self.deposit_interest:          float = params["bank"]["deposit_interest"] * self.dt
+        self.natural_interest:          float = params["bank"]["loan_interest"]
+        self.sigma:                     float = params["bank"]["sigma"] * np.sqrt(self.dt)
+        self.loan_periods:              int   = params["bank"]["loan_years"] * self.steps
+        self.min_capital_ratio:         float = params["bank"]["min_capital_ratio"]
         self.defaults:                  int   = 0
         self.bankrupt:                  bool  = False
         # Mutable data
@@ -208,8 +208,9 @@ class Bank:
         self.assets:                    NDArray = np.zeros(shape=self.time)
         self.liabilities:               NDArray = np.zeros(shape=self.time)
         self.age:                       NDArray = np.zeros(shape=self.time)
+        self.degree:                    NDArray = np.zeros(shape=self.time)
         # Initial values
-        self.loan_interest[0]           = params['bank']['loan_interest'] + params['firm']['inflation']
+        self.loan_interest[0]           = params["bank"]["loan_interest"] + params["firm"]["inflation"]
 
     def __repr__(self) -> str:
         """
@@ -219,7 +220,7 @@ class Bank:
         -------
             representation : str
         """
-        return f'Bank: {self.id}'
+        return f"Bank: {self.id}"
     
     def __str__(self) -> str:
         """ 
@@ -229,7 +230,7 @@ class Bank:
         -------
             agent type : str
         """
-        return 'Bank'
+        return "Bank"
 
     def initialise_accounts(self) -> None:
         """
@@ -265,6 +266,8 @@ class Bank:
         if self.loans[t] != 0:
             # calculate expected bad loans as a ratio of total loans
             self.expected_loss_ratio[t] = self.expected_loss[t] / self.loans[t]
+        # update bank degree 
+        self.degree[t] = len(self.loan_firms)
 
     def determine_deposits(self, t: int) -> None:
         """

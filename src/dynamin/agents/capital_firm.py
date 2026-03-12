@@ -272,12 +272,12 @@ class CapitalFirm(AbstractFirm):
         """
         super().__init__(id, init_output, init_wage, init_profits, init_deposits, init_equity, params)
         # Parameters
-        self.excess_output:             float = params['kfirm']['excess_output']
+        self.excess_output:             float = params["kfirm"]["excess_output"]
         # Initial values
-        self.market_share[0]            = 1 / params['simulation']['num_kfirms']
+        self.market_share[0]            = 1 / params["simulation"]["num_kfirms"]
         self.desired_inventories[0]     = self.excess_output * init_output
         self.profits[0]                 = init_profits
-        self.profit_share[0]            = self.profits[0] / (init_output * params['firm']['price'])
+        self.profit_share[0]            = self.profits[0] / (init_output * params["firm"]["price"])
         self.deposits[0]                = init_deposits
         self.equity[0]                  = init_equity
 
@@ -289,7 +289,7 @@ class CapitalFirm(AbstractFirm):
         -------
             representation : str
         """
-        return f'Kfirm: {self.id}'
+        return f"Kfirm: {self.id}"
     
     def __str__(self) -> str:
         """ 
@@ -299,7 +299,7 @@ class CapitalFirm(AbstractFirm):
         -------
             agent type : str
         """
-        return 'CapitalFirm'
+        return "CapitalFirm"
 
     def determine_output(self, t: int) -> None:
         """

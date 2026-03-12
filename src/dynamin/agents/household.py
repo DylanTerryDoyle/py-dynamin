@@ -103,14 +103,14 @@ class Household:
         """
         # Parameters 
         self.id:                    int   = id
-        self.steps:                 int   = params['simulation']['steps']
-        self.time:                  int   = (params['simulation']['years'] + params['simulation']['start'])*self.steps + 1
+        self.steps:                 int   = params["simulation"]["steps"]
+        self.time:                  int   = (params["simulation"]["years"] + params["simulation"]["start"])*self.steps + 1
         self.dt:                    float = 1/self.steps
-        self.mpc_income:            float = params['household']['mpc_income']
-        self.mpc_deposits:          float = params['household']['mpc_deposits']
-        self.num_firms:             int   = params['household']['num_firms']
-        self.num_cfirms:            int   = params['household']['num_cfirms']
-        self.deposit_interest:      float = params['bank']['deposit_interest'] * self.dt
+        self.mpc_income:            float = params["household"]["mpc_income"]
+        self.mpc_deposits:          float = params["household"]["mpc_deposits"]
+        self.num_firms:             int   = params["household"]["num_firms"]
+        self.num_cfirms:            int   = params["household"]["num_cfirms"]
+        self.deposit_interest:      float = params["bank"]["deposit_interest"] * self.dt
         self.employed:              bool  = False
         # Data  
         self.wage:                  NDArray = np.zeros(shape=self.time)
@@ -131,7 +131,7 @@ class Household:
         -------
             representation : str
         """
-        return f'Household: {self.id}'
+        return f"Household: {self.id}"
     
     def __str__(self) -> str:
         """ 
@@ -141,7 +141,7 @@ class Household:
         -------
             agent type : str
         """
-        return 'Household'
+        return "Household"
     
     def determine_income(self, t: int) -> None:
         """
