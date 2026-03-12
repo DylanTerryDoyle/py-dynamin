@@ -9,7 +9,7 @@ simulation:
   # max number of cpu workers (cores)
   n_workers: 5
   # number of simulations in a batch
-  num_sims: 5
+  num_sims: 10
   # number of years in each simulation
   years: 100
   # number of steps in each year

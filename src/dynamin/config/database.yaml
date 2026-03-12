@@ -62,7 +62,10 @@ firms: [
   "age",
   "market_share",
   "labour",
-  "price"
+  "price",
+  "profits",
+  "capital",
+  "investment"
 ]
 # banks variables
 banks: [
