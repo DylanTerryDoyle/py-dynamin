@@ -1,12 +1,7 @@
-### import libraries
-import numpy as np
-from numpy.typing import NDArray
-from scipy.optimize import fsolve
-
 ### import local ###
 from dynamin.utils import load_config
 
-def balanced_growth_solution(params: dict) -> NDArray:
+def balanced_growth_solution(params: dict) -> None:
     ### growth rates ###
     # real growth rate 
     g = params["firm"]["growth"]
@@ -91,7 +86,7 @@ def balanced_growth_solution(params: dict) -> NDArray:
 
     ### total variables ###
     pi = pi_C + pi_K + pi_B
-    e = e_C + e_C + e_B + e_H 
+    e = e_C + e_K + e_B + e_H 
 
     ### print results ###
     print("Households:")
@@ -113,8 +108,8 @@ def balanced_growth_solution(params: dict) -> NDArray:
 
     print("\nBanks:")
     print(f"- Bank profit share: pi_B = {pi_B:.4f}")
-    print(f"- Bank equity ratio: e_C = {e_B:.4f}")
-    print(f"- Bank reserve ratio: e_C = {r:.4f}")
+    print(f"- Bank equity ratio: e_B = {e_B:.4f}")
+    print(f"- Bank reserve ratio: r = {r:.4f}")
 
     print("\nTotal variables")
     print(f"- Wage share: omega = {omega:.4f}")
