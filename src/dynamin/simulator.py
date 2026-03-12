@@ -41,7 +41,7 @@ def _progress_monitor(progress_queue, total_steps, num_sims, scenario):
         while completed < total_steps * num_sims:
             try:
                 msg = progress_queue.get(timeout=1)
-                if msg == 'DONE':
+                if msg == "DONE":
                     break
                 completed += 1
                 pbar.update(1)
@@ -118,7 +118,7 @@ def _batch_run(
             pool.map(_single_run_wrapper, args_list)
         
         # Signal monitor to finish
-        progress_queue.put('DONE')
+        progress_queue.put("DONE")
         
         # Wait for monitor to finish (with timeout)
         monitor.join(timeout=5)

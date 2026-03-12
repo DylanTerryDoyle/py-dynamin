@@ -220,19 +220,19 @@ class Model:
         """
         ### Parameters ###
         self.params:                dict  = params
-        self.simulations:           int   = params['simulation']['num_sims']
-        self.steps:                 int   = params['simulation']['steps']
-        self.time:                  int   = (params['simulation']['years'] + params['simulation']['start'])*self.steps + 1
-        self.start:                 int   = params['simulation']['start']*self.steps
+        self.simulations:           int   = params["simulation"]["num_sims"]
+        self.steps:                 int   = params["simulation"]["steps"]
+        self.time:                  int   = (params["simulation"]["years"] + params["simulation"]["start"])*self.steps + 1
+        self.start:                 int   = params["simulation"]["start"]*self.steps
         self.dt:                    float = 1/self.steps
-        self.num_households:        int   = params['simulation']['num_households']
-        self.num_banks:             int   = params['simulation']['num_banks']
-        self.num_cfirms:            int   = params['simulation']['num_cfirms']
-        self.num_kfirms:            int   = params['simulation']['num_kfirms']
+        self.num_households:        int   = params["simulation"]["num_households"]
+        self.num_banks:             int   = params["simulation"]["num_banks"]
+        self.num_cfirms:            int   = params["simulation"]["num_cfirms"]
+        self.num_kfirms:            int   = params["simulation"]["num_kfirms"]
         self.num_firms:             int   = self.num_cfirms + self.num_kfirms
-        self.cfirm_id:              int   = params['simulation']['num_kfirms']
-        self.kfirm_id:              int   = params['simulation']['num_cfirms']
-        self.length:                int   = params['bank']['length']
+        self.cfirm_id:              int   = params["simulation"]["num_kfirms"]
+        self.kfirm_id:              int   = params["simulation"]["num_cfirms"]
+        self.length:                int   = params["bank"]["length"]
         self.initial_output:        float = np.floor(self.num_households/self.num_firms)
         
         ### probability of default data ### 
@@ -278,12 +278,12 @@ class Model:
         
         ### Initial values ### 
         self.real_gdp[0]            = self.initial_output * self.num_firms
-        self.nominal_gdp[0]         = self.real_gdp[0] * params['firm']['price']
+        self.nominal_gdp[0]         = self.real_gdp[0] * params["firm"]["price"]
         self.real_consumption[0]    = self.initial_output * self.num_cfirms
         self.real_investment[0]     = self.initial_output * self.num_kfirms
-        self.avg_cfirm_price[0]     = params['firm']['price']
-        self.avg_kfirm_price[0]     = params['firm']['price']
-        self.inflation[0]           = params['firm']['inflation']
+        self.avg_cfirm_price[0]     = params["firm"]["price"]
+        self.avg_kfirm_price[0]     = params["firm"]["price"]
+        self.inflation[0]           = params["firm"]["inflation"]
         
         ### balanced growth ###
         # parameters
@@ -339,7 +339,7 @@ class Model:
         e_C = pi_C / gN 
 
         # initial wages
-        init_wage = omega / (params['firm']['price'] * params['firm']['productivity'])
+        init_wage = omega / (params["firm"]["price"] * params["firm"]["productivity"])
         # initial cfirm debt 
         init_cfirm_debt = (d * self.nominal_gdp[0]) / self.num_cfirms
         # inital cfirm profits 
@@ -1177,11 +1177,11 @@ class Model:
         self.real_gdp[t]                = self.real_consumption[t] + self.real_investment[t]
         self.nominal_gdp[t]             = self.nominal_consumption[t] + self.nominal_investment[t]
         self.debt[t]                    = sum(firm.debt[t] for firm in self.firms)
-        self.profits[t]                 = sum(firm.profits[t] for firm in self.firms) + sum(bank.profits[t] for bank in self.banks)
+        self.profits[t]                 = sum(firm.price[t] * firm.output[t] - firm.wage_bill[t] for firm in self.firms)
         self.avg_cfirm_price[t]         = self.nominal_consumption[t] / self.real_consumption[t]
         self.avg_kfirm_price[t]         = self.nominal_investment[t] / self.real_investment[t]
-        self.cfirm_nhhi[t]              = (sum(cfirm.market_share[t] ** 2 for cfirm in self.cfirms) - 1 / num_cfirms) / (1 - 1 / num_cfirms)
-        self.kfirm_nhhi[t]              = (sum(kfirm.market_share[t] ** 2 for kfirm in self.kfirms) - 1 / num_kfirms) / (1 - 1 / num_kfirms)
+        self.cfirm_nhhi[t]              = (sum(cfirm.market_share[t] ** 2 for cfirm in self.cfirms) - 1 / num_cfirms) / (1 - 1 / num_cfirms) if num_cfirms > 0 else 0.0
+        self.kfirm_nhhi[t]              = (sum(kfirm.market_share[t] ** 2 for kfirm in self.kfirms) - 1 / num_kfirms) / (1 - 1 / num_kfirms) if num_kfirms > 0 else 0.0
         self.employment[t]              = sum(len(firm.employees) for firm in self.firms)
         self.unemployment_rate[t]       = (self.num_households - self.employment[t]) / self.num_households
         self.wages[t]                   = sum(firm.wage_bill[t] for firm in self.firms)
