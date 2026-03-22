@@ -20,7 +20,8 @@ plt.rcParams["font.family"] = ["serif"]
 x_figsize = 10
 y_figsize = x_figsize/2
 # fontsize
-fontsize = 25
+large_fontsize = 35
+medium_fontsize = 25
 # upper decile 
 upper = 0.95
 # lower decile
@@ -104,8 +105,8 @@ for i, scenario in scenarios.iterrows():
     plt.fill_between(years, micro_lower["esl_gdp"], micro_upper["esl_gdp"], color="grey", alpha=0.2, linewidth=1)
     plt.tight_layout()
     plt.ylim((-0.01, 0.11))
-    plt.yticks((0.0, 0.02, 0.04, 0.06, 0.08, 0.1),fontsize=fontsize)
-    plt.xticks(fontsize=fontsize)
+    plt.yticks((0.0, 0.02, 0.04, 0.06, 0.08, 0.1),fontsize=medium_fontsize)
+    plt.xticks(fontsize=medium_fontsize)
     plt.savefig(figure_path / f"esl_gdp_{suffix}", bbox_inches="tight")
 
 
@@ -135,7 +136,7 @@ for var in micro_vars:
         micro_scenario_data,
         variable = var, 
         figsize = (x_figsize, y_figsize),
-        fontsize = fontsize, 
+        fontsize = large_fontsize, 
         xlabels = scenarios_short_names,
         xticks = xticks,
         colours = colours,
@@ -310,7 +311,7 @@ box_plot_scenarios(
     cfirm_large_ages,
     variable="cfirm_age_large",
     figsize=(x_figsize, y_figsize),
-    fontsize=fontsize,
+    fontsize=large_fontsize,
     xlabels=scenarios_short_names,
     xticks=xticks,
     colours=colours,
@@ -323,7 +324,7 @@ box_plot_scenarios(
     kfirm_large_ages,
     variable="kfirm_age_large",
     figsize=(x_figsize, y_figsize),
-    fontsize=fontsize,
+    fontsize=large_fontsize,
     xlabels=scenarios_short_names,
     xticks=xticks,
     colours=colours,
@@ -336,7 +337,7 @@ box_plot_scenarios(
     bank_large_ages,
     variable="bank_age_large",
     figsize=(x_figsize, y_figsize),
-    fontsize=fontsize,
+    fontsize=large_fontsize,
     xlabels=scenarios_short_names,
     xticks=xticks,
     colours=colours,
@@ -349,7 +350,7 @@ box_plot_scenarios(
     cfirm_small_ages,
     variable="cfirm_age_small",
     figsize=(x_figsize, y_figsize),
-    fontsize=fontsize,
+    fontsize=large_fontsize,
     xlabels=scenarios_short_names,
     xticks=xticks,
     colours=colours,
@@ -362,7 +363,7 @@ box_plot_scenarios(
     kfirm_small_ages,
     variable="kfirm_age_small",
     figsize=(x_figsize, y_figsize),
-    fontsize=fontsize,
+    fontsize=large_fontsize,
     xlabels=scenarios_short_names,
     xticks=xticks,
     colours=colours,
@@ -375,7 +376,7 @@ box_plot_scenarios(
     bank_small_ages,
     variable="bank_age_small",
     figsize=(x_figsize, y_figsize),
-    fontsize=fontsize,
+    fontsize=large_fontsize,
     xlabels=scenarios_short_names,
     xticks=xticks,
     colours=colours,

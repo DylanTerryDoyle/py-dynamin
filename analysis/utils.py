@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from scipy import stats
 from pathlib import Path
 from sqlalchemy import Engine
-from statsmodels.tsa.statespace.varmax import VARMAX
+from statsmodels.tsa.api import VAR 
 
 def load_scenarios(engine: Engine) -> pd.DataFrame:
     """
@@ -94,7 +94,7 @@ def load_macro_data(engine: Engine, scenario_id: int, params: dict):
     # productivity growth
     data["productivity_growth"] = data.groupby("simulation_id")["productivity"].transform(lambda x: np.log(x) - np.log(x.shift(steps)))
     # credit: credit (change in debt) as a percentage of GDP
-    data["credit_gdp"] = data.groupby("simulation_id")["debt"].transform(lambda x: x - x.shift(steps)) / data["nominal_gdp"]
+    data["credit_rate"] = data.groupby("simulation_id")["debt"].transform(lambda x: x - x.shift(steps)) / data["nominal_gdp"]
     # debt growth (log difference)
     data["debt_growth"] = data.groupby("simulation_id")["debt"].transform(lambda x: np.log(x) - np.log(x.shift(steps)))
     # change unemployment
@@ -272,7 +272,7 @@ def box_plot_scenarios(
     # x axis ticks
     plt.xticks(xticks, xlabels, fontsize=fontsize)
     # save figure
-    plt.savefig(figure_path / f"box_plot_{variable}", bbox_inches="tight")
+    plt.savefig(figure_path / f"box_plot_{variable}", dpi=400, bbox_inches="tight")
     
 def normality_tests(data: pd.Series, significance: float=0.01):
     # ignore scipy warnings 
@@ -402,7 +402,7 @@ def plot_autocorrelation(
     # legend
     plt.legend(fontsize=fontsize, loc="upper right")
     # save figure
-    plt.savefig(savefig, bbox_inches="tight")
+    plt.savefig(savefig, dpi=400, bbox_inches="tight")
     plt.close()
 
 def plot_cross_correlation(
@@ -491,8 +491,52 @@ def plot_cross_correlation(
     # legend
     plt.legend(fontsize=fontsize, loc="upper right")
     # save figure
-    plt.savefig(savefig, bbox_inches="tight")
+    plt.savefig(savefig, dpi=400, bbox_inches="tight")
     plt.close()
+
+def fit_powerlaw(data: np.ndarray) -> tuple[float, float]:
+    """
+    Estimates power-law exponent (alpha) and xmin by minimising the
+    KS statistic between the empirical tail and the fitted Pareto CDF,
+    following Clauset, Shalizi & Newman (2009).
+
+    Returns
+    -------
+    alpha : float   Power-law exponent
+    xmin  : float   Lower cutoff
+    """
+    data = np.sort(data)
+    n = len(data)
+
+    # Search over candidate xmin values (up to 90th percentile)
+    max_idx = int(0.99 * n)
+    candidates = data[1:max_idx]  # skip the very first point
+
+    best_ks   = np.inf
+    best_xmin = candidates[0]
+    best_alpha = 2.0
+
+    for xmin_candidate in candidates:
+        tail = data[data >= xmin_candidate]
+        if len(tail) < 20:          # need enough points for a stable fit
+            break
+
+        # MLE for Pareto alpha given xmin
+        # alpha_hat = 1 + n_tail / sum(log(x / xmin))
+        n_tail = len(tail)
+        alpha_hat = 1 + n_tail / np.sum(np.log(tail / xmin_candidate))
+
+        # KS statistic between empirical and theoretical CDF
+        empirical_cdf = np.arange(1, n_tail + 1) / n_tail
+        theoretical_cdf = 1 - (xmin_candidate / tail) ** (alpha_hat - 1)
+        ks = np.max(np.abs(empirical_cdf - theoretical_cdf))
+
+        if ks < best_ks:
+            best_ks    = ks
+            best_xmin  = xmin_candidate
+            best_alpha = alpha_hat
+
+    return best_alpha, best_xmin
 
 def plot_ccdf(
     data: np.typing.ArrayLike,
@@ -508,217 +552,632 @@ def plot_ccdf(
     and compares against a lognormal distribution.
     """
 
-    # --- basic data hygiene ---
+    ### clean data ###
     data = np.asarray(data, dtype=float)
     data = data[np.isfinite(data)]
-    data = data[data > 1]
+    data = data[data > 0.01]
 
     if data.size < 100:
         raise ValueError("Too few positive samples for reliable power-law fitting.")
 
-    # --- power-law fit ---
-    results = pl.Fit(data)
+    ### power-law fit ###
+    alpha, xmin = fit_powerlaw(data)
 
-    alpha = results.alpha
-    xmin = results.xmin
+    # alpha = results.alpha
+    # xmin = results.xmin
 
-    # --- empirical CCDF ---
+    ### lognormal fit ###
+    ln_shape, ln_loc, ln_scale = stats.lognorm.fit(data, floc=0)
+
+    ### empirical CCDF ###
     x = np.sort(data)
     cdf = np.arange(1, len(x) + 1) / len(x)
     ccdf = 1.0 - cdf
 
-    plt.figure(figsize=figsize)
-    plt.scatter(
-        x,
-        ccdf,
-        color="skyblue",
-        edgecolors="k",
-        alpha=0.7,
-        s=30,
-        label="Empirical CCDF",
-    )
+    ### plot fits ###
 
-    # --- power-law CCDF (rescaled at xmin) ---
+    # plot empirical CCDF
+    plt.figure(figsize=figsize)
+    plt.scatter(x, ccdf, color="lightgrey", edgecolors="k", alpha=0.7, s=30, label="Empirical CCDF",)
+    # power-law CCDF (rescaled at xmin)
     idx = np.searchsorted(x, xmin)
     rescale = ccdf[idx]
-
-    powerlaw_ccdf = np.where(
-        x >= xmin,
-        (xmin / x) ** (alpha - 1) * rescale,
-        np.nan,
-    )
-
-    plt.plot(
-        x,
-        powerlaw_ccdf,
-        color="limegreen",
-        linewidth=3,
-        label=rf"Power law ($\alpha$ = {alpha:.2f})",
-    )
-
-    # --- xmin marker ---
-    plt.axvline(
-        xmin,
-        color="k",
-        linestyle=":",
-        label=rf"$x_{{\min}}$ = {round(xmin, dp)}",
-    )
-
-    # --- lognormal comparison ---
-    ln_shape, ln_loc, ln_scale = stats.lognorm.fit(data, floc=0)
+    powerlaw_ccdf = np.where(x >= xmin, (xmin / x) ** (alpha - 1) * rescale, np.nan)
+    # plot power-law fit
+    plt.plot(x, powerlaw_ccdf, color="tab:cyan", linewidth=3, label=rf"Power law ($\alpha$ = {alpha:.2f})",)
+    # xmin line
+    plt.axvline(xmin, color="k", linestyle=":", label=rf"$x_{{\min}}$ = {round(xmin, dp)}")
+    # lognormal CCDF
     ln_ccdf = 1.0 - stats.lognorm.cdf(x, ln_shape, ln_loc, ln_scale)
+    plt.plot( x, ln_ccdf, color="tab:red", linestyle="--", linewidth=2, label="Log-normal")
 
-    plt.plot(
-        x,
-        ln_ccdf,
-        color="r",
-        linestyle="--",
-        linewidth=2,
-        label="Log-normal",
-    )
-
-    # --- plot cosmetics ---
+    # plot settings
     plt.loglog()
     plt.legend(loc="lower left", fontsize=fontsize)
     plt.xticks(fontsize=fontsize)
     plt.yticks(fontsize=fontsize)
     plt.ylim(ylim)
-
-    plt.savefig(savefig, bbox_inches="tight")
+    # save figure
+    plt.savefig(savefig, dpi=400, bbox_inches="tight")
     plt.close()
 
-    # --- diagnostics ---
+    ### results summary ###
     print(f" - Power-law exponent (alpha) = {alpha:.4f}")
     print(f" - Power-law xmin = {xmin:.4f}\n")
 
-def annualise_macro_data(data: pd.DataFrame, steps: int) -> pd.DataFrame:
+def minskyan_test(
+    data: pd.DataFrame,
+    min_obs: int = 20,
+    window: int = 8,
+    min_consecutive: int = 2,
+):
     """
-    Convert quarterly simulation data to annual frequency.
-
-    Assumes:
-    - real_gdp and real_investment are quarterly flows
-    - debt is end-of-quarter stock
+    Event study test for whether credit_rate and debt_ratio peak before recessions.
+ 
+    For each simulation:
+      - Identifies recession start dates (min_consecutive periods of negative rgdp_growth).
+      - Extracts pre/post windows of length `window` around each recession start.
+      - Records the lag of the peak credit_rate and debt_ratio in the pre-recession window.
+      - Tests whether the peak occurs before the recession start (peak_lag < 0).
+ 
+    Parameters
+    ----------
+    data            : DataFrame with columns simulation_id, rgdp_growth,
+                      credit_rate, debt_ratio.
+    min_obs         : Minimum observations required per simulation.
+    window          : Number of periods before and after recession start to extract.
+    min_consecutive : Consecutive negative growth periods to define a recession.
     """
-
-    # Annual GDP and investment = sum of quarters
-    annual_flows = data.groupby(["simulation_id", "year"]).agg(
-        {
-            "real_gdp": "sum",
-            "real_investment": "sum"
-        }
-    )
-
-    # Annual debt = end-of-year (last quarter)
-    annual_debt = (
-        data
-        .sort_values(["simulation_id", "year", "time"])
-        .groupby(["simulation_id", "year"])
-        .tail(1)
-        .set_index(["simulation_id", "year"])["debt"]
-    )
-
-    annual = annual_flows.join(annual_debt).reset_index()
-
-    # Compute annual log growth
-    annual["rgdp_growth"] = annual.groupby("simulation_id")["real_gdp"].transform(lambda x: np.log(x) - np.log(x.shift(1)))
-
-    annual["investment_growth"] = (
-        annual.groupby("simulation_id")["real_investment"]
-        .transform(lambda x: np.log(x) - np.log(x.shift(1)))
-    )
-
-    annual["debt_growth"] = (
-        annual.groupby("simulation_id")["debt"]
-        .transform(lambda x: np.log(x) - np.log(x.shift(1)))
-    )
-
-    return annual.dropna()
-
-def minksy_cycle_test(data: pd.DataFrame, min_obs: int = 10, require_stable: bool = True):
-
-    # supress statsmodels warnings 
-    warnings.filterwarnings("ignore", module="statsmodels")
-
-    results_list = []
-    total_sims = 0
-    converged_sims = 0
-    stable_sims = 0
-
+ 
+    results_list            = []
+    all_credit_rate_windows = []   # (n_episodes, 2*window+1) — for aggregate plot
+    all_debt_ratio_windows  = []
+ 
+    total_sims   = 0
+    dropped_obs  = 0
+    no_recession = 0
+ 
+    # helper: find all recession start dates in a growth series
+    def find_recession_starts(growth, min_consecutive):
+        starts = []
+        count  = 0
+        for t, v in enumerate(growth):
+            count = count + 1 if v < 0 else 0
+            if count == min_consecutive:
+                # start is the first period of the negative streak
+                starts.append(t - min_consecutive + 1)
+        return starts
+ 
     for sim_id, df in data.groupby("simulation_id"):
-
+ 
         total_sims += 1
-
-        df = df[["rgdp_growth", "debt_growth"]].dropna()
-
+        df = df[["rgdp_growth", "credit_rate", "debt_ratio"]].dropna().reset_index(drop=True)
+ 
         if len(df) < min_obs:
+            dropped_obs += 1
             continue
-
-        df = df.reset_index(drop=True)
-
-        try:
-            model = VARMAX(df, order=(1, 1), trend='c')
-            res = model.fit(method='lbfgs', disp=False)
-        except Exception:
+ 
+        recession_starts = find_recession_starts(df["rgdp_growth"].values, min_consecutive)
+ 
+        if not recession_starts:
+            no_recession += 1
             continue
-
-        # if not res.mle_retvals.get("converged", False):
-        #     continue
-
-        converged_sims += 1
-
-        # ---- Extract AR(1) matrix correctly ----
-        B = res.coefficient_matrices_var[0]
-
-        beta11, beta12 = B[0]
-        beta21, beta22 = B[1]
-
-        # Necessary Minsky cross-effects
-        necessary = (beta12 < 0) and (beta21 > 0)
-
-        # Trace / determinant conditions
-        trace = np.trace(B)
-        det = np.linalg.det(B)
-        discriminant = trace**2 - 4 * det
-
-        complex_ev = discriminant < 0
-
-        # Eigenvalues
-        eigenvalues = np.linalg.eigvals(B)
-        ev1, ev2 = eigenvalues
-
-        # structural definition of minskyan cycle (stockhammer & Gouzoulis, 2023)
-        minsky = necessary and complex_ev
-
-        # complex eigenvalues
-        is_complex = np.iscomplex(eigenvalues).any()
-        
-        results_list.append({
-            "simulation_id": sim_id,
-            "beta12": beta12,
-            "beta21": beta21,
-            "necessary": necessary,
-            "complex_ev": complex_ev,
-            "discriminant": discriminant,
-            "minsky_cycle": minsky,
-            "ev1": ev1,
-            "ev2": ev2,
-            "complex_pair": is_complex
-        })
-
+ 
+        for t0 in recession_starts:
+ 
+            # require full window on both sides
+            if t0 - window < 0 or t0 + window >= len(df):
+                continue
+ 
+            credit_window = df["credit_rate"].iloc[t0 - window: t0 + window + 1].values
+            debt_window   = df["debt_ratio"].iloc[t0 - window: t0 + window + 1].values
+ 
+            # lag of peak within window — negative means peak before recession start
+            # window index `window` corresponds to lag 0 (recession start)
+            credit_peak_idx = np.argmax(credit_window)
+            debt_peak_idx   = np.argmax(debt_window)
+ 
+            # convert index to lag relative to recession start
+            credit_peak_lag = credit_peak_idx - window
+            debt_peak_lag   = debt_peak_idx   - window
+ 
+            # peak precedes recession start
+            credit_peaks_before = credit_peak_lag < 0
+            debt_peaks_before   = debt_peak_lag   < 0
+ 
+            # minsky condition: both credit and debt peak before recession
+            minsky_condition = credit_peaks_before and debt_peaks_before
+ 
+            all_credit_rate_windows.append(credit_window)
+            all_debt_ratio_windows.append(debt_window)
+ 
+            results_list.append({
+                "simulation_id":       sim_id,
+                "recession_start":     t0,
+                "credit_peak_lag":     credit_peak_lag,
+                "debt_peak_lag":       debt_peak_lag,
+                "credit_peaks_before": credit_peaks_before,
+                "debt_peaks_before":   debt_peaks_before,
+                "minsky":              minsky_condition,
+            })
+    
+    if not results_list:
+        raise ValueError("No recession episodes found.")
+ 
     results_df = pd.DataFrame(results_list)
-
-    if len(results_df) == 0:
-        raise ValueError("No valid VARMA estimations.")
-
+ 
+    ### formal test: is mean peak lag significantly negative? ###
+    from scipy.stats import ttest_1samp
+    credit_tstat, credit_pvalue = ttest_1samp(results_df["credit_peak_lag"], popmean=0)
+    debt_tstat,   debt_pvalue   = ttest_1samp(results_df["debt_peak_lag"],   popmean=0)
+ 
+    ### summary results ###
     summary = pd.DataFrame([{
-        "total_simulations": total_sims,
-        "converged_simulations": converged_sims,
-        "stable_simulations": stable_sims if require_stable else np.nan,
-        "share_necessary": results_df["necessary"].mean(),
-        "share_complex": results_df["complex_ev"].mean(),
-        "share_minsky": results_df["minsky_cycle"].mean(),
-        "mean_beta12": results_df["beta12"].mean(),
-        "mean_beta21": results_df["beta21"].mean()
+        "total_simulations":         total_sims,
+        "total_episodes":            len(results_list),
+ 
+        # mean peak lags (negative => peaks before recession)
+        "mean_credit_peak_lag":      results_df["credit_peak_lag"].mean(),
+        "mean_debt_peak_lag":        results_df["debt_peak_lag"].mean(),
+ 
+        # share peaking before recession
+        "share_credit_peaks_before": results_df["credit_peaks_before"].mean(),
+        "share_debt_peaks_before":   results_df["debt_peaks_before"].mean(),
+        "share_minsky":              results_df["minsky"].mean(),
+ 
+        # formal t-test: mean peak lag < 0
+        "credit_peak_tstat":         credit_tstat,
+        "credit_peak_pvalue":        credit_pvalue,
+        "debt_peak_tstat":           debt_tstat,
+        "debt_peak_pvalue":          debt_pvalue,
     }])
+ 
+    return results_df, summary, all_credit_rate_windows, all_debt_ratio_windows
 
-    return results_df, summary
+def debt_deflation_test(
+    data: pd.DataFrame,
+    min_obs: int = 20,
+    window: int = 8,
+    min_consecutive: int = 2,
+):
+    """
+    Event study test for whether deflation and recession occur at the same time,
+    consistent with Fisher's (1933) debt-deflation theory.
+ 
+    For each simulation:
+      - Identifies recession start dates (min_consecutive periods of negative rgdp_growth).
+      - Checks whether inflation is negative during the recession episode (deflation present).
+      - Tests whether debt_ratio peaks before the recession start.
+      - Fisher condition: deflation present during recession and debt peaks before.
+ 
+    Parameters
+    ----------
+    data            : DataFrame with columns simulation_id, rgdp_growth,
+                      debt_ratio, inflation.
+    min_obs         : Minimum observations required per simulation.
+    window          : Number of periods before and after recession start to extract
+                      (used for debt_ratio peak detection and aggregate plot).
+    min_consecutive : Consecutive negative growth periods to define a recession.
+    """
+ 
+    results_list           = []
+    all_debt_ratio_windows = []   # (n_episodes, 2*window+1) — for aggregate plot
+    all_inflation_windows  = []
+ 
+    total_sims   = 0
+    dropped_obs  = 0
+    no_recession = 0
+ 
+    # helper: find all recession start dates in a growth series
+    def find_recession_starts(growth, min_consecutive):
+        starts = []
+        count  = 0
+        for t, v in enumerate(growth):
+            count = count + 1 if v < 0 else 0
+            if count == min_consecutive:
+                # start is the first period of the negative streak
+                starts.append(t - min_consecutive + 1)
+        return starts
+ 
+    for sim_id, df in data.groupby("simulation_id"):
+ 
+        total_sims += 1
+        df = df[["rgdp_growth", "debt_ratio", "inflation"]].dropna().reset_index(drop=True)
+ 
+        if len(df) < min_obs:
+            dropped_obs += 1
+            continue
+ 
+        recession_starts = find_recession_starts(df["rgdp_growth"].values, min_consecutive)
+ 
+        if not recession_starts:
+            no_recession += 1
+            continue
+ 
+        for t0 in recession_starts:
+ 
+            # require full window on both sides
+            if t0 - window < 0 or t0 + window >= len(df):
+                continue
+ 
+            debt_window      = df["debt_ratio"].iloc[t0 - window: t0 + window + 1].values
+            inflation_window = df["inflation"].iloc[t0 - window: t0 + window + 1].values
+ 
+            # debt ratio: lag of peak — negative means peak before recession start
+            debt_peak_idx   = np.argmax(debt_window)
+            debt_peak_lag   = debt_peak_idx - window
+            debt_peaks_before = debt_peak_lag < 0
+ 
+            # deflation: inflation is negative during the recession episode
+            recession_inflation = df["inflation"].iloc[t0: t0 + min_consecutive].values
+            deflation_present   = bool((recession_inflation < 0).any())
+ 
+            # fisher condition: deflation present during recession and debt peaked before
+            fisher_condition = deflation_present and debt_peaks_before
+ 
+            all_debt_ratio_windows.append(debt_window)
+            all_inflation_windows.append(inflation_window)
+ 
+            results_list.append({
+                "simulation_id":      sim_id,
+                "recession_start":    t0,
+                "debt_peak_lag":      debt_peak_lag,
+                "debt_peaks_before":  debt_peaks_before,
+                "deflation_present":  deflation_present,
+                "fisher":             fisher_condition,
+            })
+     
+    if not results_list:
+        raise ValueError("No recession episodes found.")
+ 
+    results_df = pd.DataFrame(results_list)
+ 
+    ### formal test: is mean debt peak lag significantly negative? ###
+    from scipy.stats import ttest_1samp
+    debt_tstat, debt_pvalue = ttest_1samp(results_df["debt_peak_lag"], popmean=0)
+ 
+    ### summary results ###
+    summary = pd.DataFrame([{
+        "total_simulations":              total_sims,
+        "total_episodes":                 len(results_list),
+ 
+        # mean debt peak lag (negative => peaks before recession)
+        "mean_debt_peak_lag":             results_df["debt_peak_lag"].mean(),
+ 
+        # share peaking before / deflation present
+        "share_debt_peaks_before":        results_df["debt_peaks_before"].mean(),
+        "share_deflation_during_recession": results_df["deflation_present"].mean(),
+        "share_fisher":                   results_df["fisher"].mean(),
+    }])
+ 
+    return results_df, summary, all_inflation_windows
+
+# def debt_deflation_test(
+#     data: pd.DataFrame,
+#     min_obs: int = 20,
+#     max_lags: int = 4,
+#     horizon: int = 12,
+#     alpha: float = 0.05,
+# ):
+#     warnings.filterwarnings("ignore", module="statsmodels")
+
+#     # recession impulse response helper
+#     def irf_recession(series, min_consecutive=2):
+#         count = 0
+#         for v in series:
+#             count = count + 1 if v < 0 else 0
+#             if count >= min_consecutive:
+#                 return True
+#         return False
+
+#     # time to recession helper
+#     def time_to_recession(series, min_consecutive=2):
+#         count = 0
+#         for t, v in enumerate(series):
+#             count = count + 1 if v < 0 else 0
+#             if count >= min_consecutive:
+#                 return t - min_consecutive + 1
+#         return np.nan
+
+#     # storage for per-simulation IRF arrays (for aggregate plot)
+#     all_inflation_irfs = []
+#     all_growth_irfs    = []
+
+#     results_list      = []
+#     total_sims        = 0
+#     dropped_obs       = 0
+#     dropped_var_fit   = 0
+#     dropped_whiteness = 0
+#     valid_sims        = 0
+
+#     for sim_id, df in data.groupby("simulation_id"):
+
+#         total_sims += 1
+#         df = df[["debt_ratio", "inflation", "rgdp_growth"]].dropna().reset_index(drop=True)
+
+#         if len(df) < min_obs:
+#             dropped_obs += 1
+#             continue
+
+#         ### fit VAR with AIC lag selection ###
+#         try:
+#             model      = VAR(df)
+#             lag_select = model.select_order(max_lags)
+#             p          = max(lag_select.aic, 1)
+#             res        = model.fit(p)
+#         except Exception:
+#             dropped_var_fit += 1
+#             continue
+
+#         valid_sims += 1
+
+#         ### orthogonalised IRF — shock scaled to one SD of the structural shock ###
+#         # orth=True applies the Cholesky decomposition of the residual covariance
+#         # matrix, giving a shock equal to a typical (one-SD) movement in debt_ratio
+#         # rather than an arbitrary one-unit impulse
+#         irf_obj = res.irf(horizon)
+
+#         # response of inflation to orthogonalised debt shock
+#         inflation_irf = irf_obj.orth_irfs[:, 1, 0]
+#         # response of growth to orthogonalised debt shock
+#         growth_irf    = irf_obj.orth_irfs[:, 2, 0]
+
+#         # store IRFs for aggregate plot
+#         all_inflation_irfs.append(inflation_irf)
+#         all_growth_irfs.append(growth_irf)
+
+#         # sign flags (point estimate)
+#         deflation_sig = bool(inflation_irf.min() < 0)
+#         recession_sig = irf_recession(growth_irf, min_consecutive=2)
+
+#         # magnitudes and timing
+#         peak_deflation = float(inflation_irf.min())
+#         trough_growth  = float(growth_irf.min())
+#         t_deflation    = int(np.argmin(inflation_irf))
+#         t_recession    = time_to_recession(growth_irf, min_consecutive=2)
+
+#         ### signed Granger causality ###
+#         try:
+#             gc_debt_infl   = res.test_causality("inflation",   ["debt_ratio"], kind="f")
+#             gc_debt_growth = res.test_causality("rgdp_growth", ["debt_ratio"], kind="f")
+#             gc_infl_growth = res.test_causality("rgdp_growth", ["inflation"],  kind="f")
+
+#             # granger significance and correct sign direction
+#             debt_causes_infl   = (gc_debt_infl.pvalue   < alpha) and (inflation_irf.min() < 0)
+#             debt_causes_growth = (gc_debt_growth.pvalue < alpha) and (growth_irf.min()    < 0)
+#             infl_causes_growth = (gc_infl_growth.pvalue < alpha) and (growth_irf.min()    < 0)
+
+#         except Exception:
+#             debt_causes_infl = debt_causes_growth = infl_causes_growth = False
+
+#         # significant Granger chain: debt -> deflation -> recession
+#         fisher_granger = debt_causes_infl and debt_causes_growth and infl_causes_growth
+
+#         # full Fisher mechanism: deflation + recession + Granger chain
+#         fisher_mechanism = deflation_sig and recession_sig and fisher_granger
+
+#         ### heterogeneity: initial debt level ###
+#         initial_debt = df["debt_ratio"].iloc[0]
+
+#         results_list.append({
+#             "simulation_id":      sim_id,
+#             "initial_debt_ratio": initial_debt,
+
+#             # IRF sign flags (point estimate)
+#             "deflation_irf": deflation_sig,
+#             "recession_irf": not np.isnan(t_recession),
+
+#             # full Fisher mechanism
+#             "fisher_irf": deflation_sig and (not np.isnan(t_recession)) and fisher_granger,
+
+#             # Granger chain
+#             "granger_debt_infl":   debt_causes_infl,
+#             "granger_debt_growth": debt_causes_growth,
+#             "granger_infl_growth": infl_causes_growth,
+#             "fisher_granger":      fisher_granger,
+
+#             # magnitudes
+#             "peak_deflation": peak_deflation,
+#             "trough_growth":  trough_growth,
+
+#             # timing (periods)
+#             "time_to_deflation": t_deflation,
+#             "time_to_recession": t_recession,
+#         })
+
+#     # diagnostics — printed before the validity check so they're always visible
+#     print(f"  [diagnostics] total: {total_sims} | drop obs: {dropped_obs} | drop fit: {dropped_var_fit} | drop whiteness: {dropped_whiteness} | valid: {valid_sims}")
+
+#     if not results_list:
+#         raise ValueError("No valid VAR estimations after diagnostics.")
+
+#     results_df = pd.DataFrame(results_list)
+
+#     ### heterogeneity: split by median initial debt ###
+#     median_debt = results_df["initial_debt_ratio"].median()
+#     high_debt   = results_df[results_df["initial_debt_ratio"] >= median_debt]
+#     low_debt    = results_df[results_df["initial_debt_ratio"] <  median_debt]
+
+#     ### summary results ###
+#     def nanmean(s):
+#         return s.dropna().mean() if len(s.dropna()) else np.nan
+
+#     summary = pd.DataFrame([{
+#         "total_simulations": total_sims,
+#         "valid_estimations": valid_sims,
+
+#         # point-estimate share
+#         "share_deflation_irf": results_df["deflation_irf"].mean(),
+#         "share_recession_irf": results_df["recession_irf"].mean(),
+#         "share_fisher_irf":    results_df["fisher_irf"].mean(),
+
+#         # Granger chain
+#         "share_granger_debt_infl":   results_df["granger_debt_infl"].mean(),
+#         "share_granger_debt_growth": results_df["granger_debt_growth"].mean(),
+#         "share_granger_infl_growth": results_df["granger_infl_growth"].mean(),
+#         "share_fisher_granger":      results_df["fisher_granger"].mean(),
+
+#         # magnitudes
+#         "mean_peak_deflation": nanmean(results_df["peak_deflation"]),
+#         "mean_trough_growth":  nanmean(results_df["trough_growth"]),
+
+#         # timing (quarters)
+#         "mean_time_to_deflation": nanmean(results_df["time_to_deflation"]),
+#         "mean_time_to_recession": nanmean(results_df["time_to_recession"]),
+
+#         # heterogeneity by debt level
+#         "fisher_sig_high_debt": high_debt["fisher_irf"].mean() if len(high_debt) else np.nan,
+#         "fisher_sig_low_debt":  low_debt["fisher_irf"].mean()  if len(low_debt)  else np.nan,
+#     }])
+
+#     return results_df, summary, all_inflation_irfs, all_growth_irfs
+
+# def pre_recession_peak_test(
+#     data: pd.DataFrame,
+#     min_obs: int = 20,
+#     window: int = 8,
+#     min_consecutive: int = 2,
+# ):
+#     """
+#     Event study test for whether credit_rate, debt_ratio, and inflation peak
+#     before recessions.
+ 
+#     For each simulation:
+#       - Identifies recession start dates (min_consecutive periods of negative rgdp_growth).
+#       - Extracts pre/post windows of length `window` around each recession start.
+#       - Records the lag of the peak credit_rate and debt_ratio in the pre-recession window.
+#       - Tests whether the peak occurs before the recession start (peak_lag < 0).
+ 
+#     Parameters
+#     ----------
+#     data            : DataFrame with columns simulation_id, rgdp_growth,
+#                       credit_rate, debt_ratio, inflation.
+#     min_obs         : Minimum observations required per simulation.
+#     window          : Number of periods before and after recession start to extract.
+#     min_consecutive : Consecutive negative growth periods to define a recession.
+#     """
+ 
+#     results_list = []
+#     all_credit_rate_windows = []   # (n_episodes, 2*window+1) — for aggregate plot
+#     all_debt_ratio_windows  = []
+#     all_inflation_windows   = []
+ 
+#     total_sims    = 0
+#     dropped_obs   = 0
+#     no_recession  = 0
+ 
+#     # helper: find all recession start dates in a growth series
+#     def find_recession_starts(growth, min_consecutive):
+#         starts = []
+#         count  = 0
+#         for t, v in enumerate(growth):
+#             count = count + 1 if v < 0 else 0
+#             if count == min_consecutive:
+#                 # start is the first period of the negative streak
+#                 starts.append(t - min_consecutive + 1)
+#         return starts
+ 
+#     for sim_id, df in data.groupby("simulation_id"):
+ 
+#         total_sims += 1
+#         df = df[["rgdp_growth", "credit_rate", "debt_ratio", "inflation"]].dropna().reset_index(drop=True)
+ 
+#         if len(df) < min_obs:
+#             dropped_obs += 1
+#             continue
+ 
+#         recession_starts = find_recession_starts(df["rgdp_growth"].values, min_consecutive)
+ 
+#         if not recession_starts:
+#             no_recession += 1
+#             continue
+ 
+#         for t0 in recession_starts:
+ 
+#             # require full window on both sides
+#             if t0 - window < 0 or t0 + window >= len(df):
+#                 continue
+ 
+#             credit_window    = df["credit_rate"].iloc[t0 - window: t0 + window + 1].values
+#             debt_window      = df["debt_ratio"].iloc[t0 - window: t0 + window + 1].values
+#             inflation_window = df["inflation"].iloc[t0 - window: t0 + window + 1].values
+ 
+#             # lag of peak within window — negative means peak before recession start
+#             # window index `window` corresponds to lag 0 (recession start)
+#             credit_peak_idx    = np.argmax(credit_window)
+#             debt_peak_idx      = np.argmax(debt_window)
+#             deflation_peak_idx = np.argmin(inflation_window)
+ 
+#             # convert index to lag relative to recession start
+#             credit_peak_lag    = credit_peak_idx    - window
+#             debt_peak_lag      = debt_peak_idx      - window
+#             deflation_peak_lag = deflation_peak_idx - window
+ 
+#             # peak precedes recession start
+#             credit_peaks_before    = credit_peak_lag    < 0
+#             debt_peaks_before      = debt_peak_lag      < 0
+#             deflation_peaks_before = deflation_peak_lag < 0
+ 
+#             # minsky condition: both credit and debt peak before recession
+#             minsky_condition = credit_peaks_before and debt_peaks_before 
+
+#             # fisher condition: deflation peaks before recession and debt ratio peaks before recession
+#             fisher_condition = deflation_peaks_before and debt_peaks_before
+ 
+#             all_credit_rate_windows.append(credit_window)
+#             all_debt_ratio_windows.append(debt_window)
+#             all_inflation_windows.append(inflation_window)
+ 
+#             results_list.append({
+#                 "simulation_id":        sim_id,
+#                 "recession_start":      t0,
+#                 "credit_peak_lag":      credit_peak_lag,
+#                 "debt_peak_lag":        debt_peak_lag,
+#                 "deflation_peak_lag":   deflation_peak_lag,
+#                 "credit_peaks_before":  credit_peaks_before,
+#                 "debt_peaks_before":    debt_peaks_before,
+#                 "deflation_peaks_before": deflation_peaks_before,
+#                 "minsky":               minsky_condition,
+#                 "fisher":               fisher_condition,
+#             })
+ 
+#     print(f"  [diagnostics] total: {total_sims} | drop obs: {dropped_obs} | no recession: {no_recession} | episodes: {len(results_list)}")
+ 
+#     if not results_list:
+#         raise ValueError("No recession episodes found.")
+ 
+#     results_df = pd.DataFrame(results_list)
+ 
+#     ### formal test: is mean peak lag significantly negative? ###
+#     from scipy.stats import ttest_1samp
+#     credit_tstat,    credit_pvalue    = ttest_1samp(results_df["credit_peak_lag"],    popmean=0)
+#     debt_tstat,      debt_pvalue      = ttest_1samp(results_df["debt_peak_lag"],      popmean=0)
+#     deflation_tstat, deflation_pvalue = ttest_1samp(results_df["deflation_peak_lag"], popmean=0)
+ 
+#     ### summary results ###
+#     summary = pd.DataFrame([{
+#         "total_simulations":           total_sims,
+#         "total_episodes":              len(results_list),
+ 
+#         # mean peak lags (negative => peaks before recession)
+#         "mean_credit_peak_lag":        results_df["credit_peak_lag"].mean(),
+#         "mean_debt_peak_lag":          results_df["debt_peak_lag"].mean(),
+#         "mean_deflation_peak_lag":     results_df["deflation_peak_lag"].mean(),
+ 
+#         # share peaking before recession
+#         "share_credit_peaks_before":    results_df["credit_peaks_before"].mean(),
+#         "share_debt_peaks_before":      results_df["debt_peaks_before"].mean(),
+#         "share_minsky":               results_df["minsky"].mean(),
+#         "share_deflation_peaks_before": results_df["deflation_peaks_before"].mean(),
+#         "share_fisher":                 results_df["fisher"].mean(),
+ 
+#         # formal t-test: mean peak lag < 0
+#         "credit_peak_tstat":           credit_tstat,
+#         "credit_peak_pvalue":          credit_pvalue,
+#         "debt_peak_tstat":             debt_tstat,
+#         "debt_peak_pvalue":            debt_pvalue,
+#         "deflation_peak_tstat":        deflation_tstat,
+#         "deflation_peak_pvalue":       deflation_pvalue,
+#     }])
+ 
+#     return results_df, summary, all_credit_rate_windows, all_debt_ratio_windows, all_inflation_windows
