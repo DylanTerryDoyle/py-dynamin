@@ -80,7 +80,7 @@ scenarios = pd.read_sql_query(
 
 ### Plot GDP Ratios ###
 
-print(f"Creating GDP ratio plots...")
+print(f"\nCreating GDP ratio plots")
 
 # start loop over databases
 
@@ -130,7 +130,7 @@ for i, scenario in scenarios.iterrows():
 
 ### Plot Box Plots Scenarios ###
 
-print("Creating box plots...")
+print("\nCreating box plots")
 
 # scenario names
 scenarios_short_names = ["G1", "G2", "ZG1", "ZG2"]
@@ -152,11 +152,7 @@ macro_vars = [
     "wage_inflation", 
     "unemployment_rate", 
     "gini", 
-    "credit_gdp", 
-    "crisis_probability", 
-    "crisis_severity", 
-    "value_at_risk", 
-    "expected_shortfall"
+    "credit_rate"
 ]
 
 for var in macro_vars:
@@ -170,5 +166,33 @@ for var in macro_vars:
         colours = colours,
         figure_path = figure_path
     )
+
+### crisis probability ###
+print("\nCrisis probability")
+for short_name, macro_data in macro_scenario_data.items():
+    # crisis flag per period
+    macro_data["crises"] = (macro_data["rgdp_growth"] < -0.03).astype(int)
+    # crisis occurrence per year per simulation
+    yearly_crisis = (macro_data.groupby(["simulation_id", "year"])["crises"].max().reset_index(name="year_crisis"))
+    # crisis probability per simulation
+    crisis_prob_sim = (yearly_crisis.groupby("simulation_id")["year_crisis"].mean().reset_index(name="crisis_probability"))
+    # print results
+    print(f"- average across simulations: {crisis_prob_sim['crisis_probability'].mean():.2%}")
+    print(f"- standard deviation across simulations: {crisis_prob_sim['crisis_probability'].std():.2%}")
+
+### crisis severity (cumulative shortfall) ###
+print("\nCrisis severity")
+for short_name, macro_data in macro_scenario_data.items():
+    # identify crisis spells
+    macro_data["crisis_spell"] = (macro_data.groupby("simulation_id")["crises"].transform(lambda x: (x != x.shift()).cumsum()))
+    # compute shortfall below -3%
+    macro_data["growth_shortfall"] = np.where(macro_data["crises"] == 1, -0.03 - macro_data["rgdp_growth"],0)
+    # sum shortfall within each crisis spell
+    crisis_severity = (macro_data[macro_data["crises"] == 1].groupby(["simulation_id", "crisis_spell"])["growth_shortfall"].sum().reset_index(name="crisis_severity"))
+    # average severity per simulation
+    severity_sim = (crisis_severity.groupby("simulation_id")["crisis_severity"].mean().reset_index())
+    # print results
+    print(f"- average across simulations: {severity_sim['crisis_severity'].mean():.2%}")
+    print(f"- standard deviation across simulations: {severity_sim['crisis_severity'].std():.2%}")
 
 print(f"\nFINISHED MACRO BATCH ANALYSIS! Check macro figures folder\n=> {figure_path}\n")
