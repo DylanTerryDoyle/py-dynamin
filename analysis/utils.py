@@ -1,13 +1,24 @@
+import re
 import warnings
 import numpy as np
 import pandas as pd
-import powerlaw as pl
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gs
 from scipy import stats
 from pathlib import Path
 from sqlalchemy import Engine
-from statsmodels.tsa.api import VAR 
+
+def format_scenario_name(name: str) -> str:
+    if name.startswith("zero_growth"):
+        number = re.search(r"\d+", name).group()
+        return f"Zero-Growth {number}"
+    elif name.startswith("growth"):
+        number = re.search(r"\d+", name).group()
+        return f"Growth {number}"
+    else:
+        # fallback
+        return name
 
 def load_scenarios(engine: Engine) -> pd.DataFrame:
     """
@@ -232,9 +243,87 @@ def load_micro_data(engine: Engine, scenario_id: int, params: dict):
     return data
 
 def box_plot_scenarios(
+    plot_data: dict[str,pd.DataFrame],
+    variables: dict[str,str],
+    scenarios_short_names: list[str],
+    figsize: tuple[float,float] = (16,10),
+    ncols: int = 2,
+    fontsize: int = 18,
+    colours: list[str] | None = None,
+    ylabel_dict: dict[str,str] | None = None,
+    yticks_dict: dict[str,list[float]] | None = None,
+    ylim_dict: dict[str,tuple[float,float]] | None = None,
+    whis: tuple[float,float]=(5,95),
+    sub_title_depth: float = 0.15,
+    wspace: float = 0.2,
+    hspace: float = 0.3,
+    figure_path: Path | str | None = None,
+    figure_name: str | None = None,
+    dp: int = 3,
+    dpi: int = 500
+):
+    """
+    Create one figure with multiple subplots, where each subplot is a box plot
+    for all scenarios for a single variable.
+    """
+    
+    n_vars = len(variables)
+    
+    fig = plt.figure(figsize=figsize)
+    outer = gs.GridSpec(n_vars // ncols, ncols, figure=fig, wspace=wspace, hspace=hspace)
+    
+    # loop over variables
+    for i, (var_name, var_key) in enumerate(variables.items()):
+        row = i // ncols
+        col = i % ncols
+        
+        ax = fig.add_subplot(outer[row, col])
+        
+        # prepare data
+        plot_vals = [plot_data[scenario][var_key].dropna().to_numpy() for scenario in scenarios_short_names]
+        
+        bplot = ax.boxplot(
+            plot_vals,
+            patch_artist=True,
+            showfliers=False,
+            medianprops=dict(color="black", linewidth=2),
+            whis=whis
+        )
+        
+        # set box colours
+        if colours:
+            for patch, color in zip(bplot["boxes"], colours):
+                patch.set_facecolor(color)
+                patch.set_alpha(0.5)
+        
+        # x-axis
+        ax.set_xticks(range(1, len(scenarios_short_names)+1))
+        ax.set_xticklabels(scenarios_short_names, fontsize=fontsize, ha="right")
+
+        # y-axis 
+        if ylim_dict and var_key in ylim_dict:
+            ax.set_ylim(ylim_dict[var_key])
+        if yticks_dict and var_key in yticks_dict:
+            ax.set_yticks(yticks_dict[var_key])
+        if ylabel_dict and var_key in ylabel_dict:
+            ax.set_ylabel(ylabel_dict[var_key], fontsize=fontsize)
+        
+        ax.tick_params(axis='y', labelsize=fontsize)
+        
+        # title below the subplot
+        ax.text(0.5, -sub_title_depth, f"({chr(97+i)}) {var_name}", ha='center', va='top', fontsize=fontsize+5, transform=ax.transAxes)
+    
+    if figure_path and figure_name:
+        figure_path = Path(figure_path)
+        figure_path.mkdir(parents=True, exist_ok=True)
+        plt.savefig(figure_path / figure_name, dpi=dpi, bbox_inches="tight")
+    elif figure_name:
+        plt.savefig(figure_name, dpi=dpi, bbox_inches="tight")
+
+def sub_boxplot(
+    ax: plt.Axes,
     plot_data: dict[str,pd.DataFrame], 
     variable: str,
-    figsize: tuple[float,float] | None=None,
     fontsize: int | None=None,
     xlabels: list[str] | None=None, 
     xticks: list[int] | None=None, 
@@ -255,8 +344,7 @@ def box_plot_scenarios(
         plot_data[scenario] = vals.to_numpy().ravel()
     
     ### box plot ###
-    plt.figure(figsize=figsize)
-    bplot = plt.boxplot(plot_data.values(), patch_artist=True, showfliers=False, medianprops=dict(color="black", linewidth=2), whis=whis)
+    bplot = ax.boxplot(plot_data.values(), patch_artist=True, showfliers=False, medianprops=dict(color="black", linewidth=2), whis=whis)
     
     ### set box colour ###
     if colours:
@@ -266,13 +354,13 @@ def box_plot_scenarios(
             
     ### figure settings ###
     # y axis ticks
-    plt.yticks(yticks, fontsize=fontsize)
+    ax.set_yticks(yticks)
     # y axis limits
-    plt.ylim(ylim)
+    ax.set_ylim(ylim)
     # x axis ticks
-    plt.xticks(xticks, xlabels, fontsize=fontsize)
-    # save figure
-    plt.savefig(figure_path / f"box_plot_{variable}", dpi=400, bbox_inches="tight")
+    ax.set_xticks(xticks)
+    # tick size
+    ax.tick_params(axis='both', labelsize=fontsize)
     
 def normality_tests(data: pd.Series, significance: float=0.01):
     # ignore scipy warnings 
@@ -326,12 +414,11 @@ def normality_tests(data: pd.Series, significance: float=0.01):
     print(f"      - test stat = {round(ad_result.statistic, 3)}")
     print(f"      - p-value = {round(ad_pvalue, 3)}")
 
-def plot_autocorrelation(
+def subplot_autocorrelation(
+    ax: plt.Axes,
     simulated: np.typing.ArrayLike, 
     empirical: np.typing.ArrayLike, 
-    figsize: tuple[int,int], 
     fontsize: int, 
-    savefig: str, 
     lags: int=20, 
     lamda: int=1600
 ):
@@ -383,42 +470,33 @@ def plot_autocorrelation(
     emp_cycle, emp_trend = sm.tsa.filters.hpfilter(empirical, lamda)
     # empirical autocorrelation
     emp_autocorr = sm.tsa.acf(emp_cycle, nlags=lags)
-    # plot results
-    plt.figure(figsize=figsize)
     # x values (lags)
     x = np.arange(0, lags+1)
     # plot empirical autocorrelation 
-    plt.plot(emp_autocorr, color="k", linestyle="--", linewidth=1, label="Empirical")
+    ax.plot(emp_autocorr, color="k", linestyle="--", linewidth=1, label="Empirical")
     # plot simulated autocorrelation median
-    plt.plot(sim_autocorr_median, color="k", linewidth=1, label="Simulated")
+    ax.plot(sim_autocorr_median, color="k", linewidth=1, label="Simulated")
     # plot confidence interval
-    plt.fill_between(x, sim_autocorr_median, sim_autocorr_upper, color="grey", alpha=0.2, label="95% CI")
-    plt.fill_between(x, sim_autocorr_median, sim_autocorr_lower, color="grey", alpha=0.2)
+    ax.fill_between(x, sim_autocorr_median, sim_autocorr_upper, color="grey", alpha=0.2, label="90% IPR")
+    ax.fill_between(x, sim_autocorr_median, sim_autocorr_lower, color="grey", alpha=0.2)
     # plot 0 line
-    plt.axhline(0, color="k")
+    ax.axhline(0, color="k")
     # figure ticks
-    plt.yticks([1.00,0.75,0.50,0.25,0.00,-0.25,-0.50,-0.75,-1.00], ["1.00","0.75","0.50","0.25","0.00","–0.25","–0.50","–0.75","–1.00"], fontsize=fontsize)
-    plt.xticks([0,5,10,15,20], [0,5,10,15,20], fontsize=fontsize)
-    # legend
-    plt.legend(fontsize=fontsize, loc="upper right")
-    # save figure
-    plt.savefig(savefig, dpi=400, bbox_inches="tight")
-    plt.close()
+    ax.set_yticks([1.00,0.75,0.50,0.25,0.00,-0.25,-0.50,-0.75,-1.00], ["1.00","0.75","0.50","0.25","0.00","–0.25","–0.50","–0.75","–1.00"], fontsize=fontsize)
+    ax.set_xticks([0,5,10,15,20], [0,5,10,15,20], fontsize=fontsize)
+    ax.set_xlabel("Lags", fontsize=fontsize + 2)
 
-def plot_cross_correlation(
+def cross_correlation(
     xsimulated: np.typing.ArrayLike,
     ysimulated: np.typing.ArrayLike,
     xempirical: np.typing.ArrayLike,
     yempirical: np.typing.ArrayLike,
-    figsize: tuple[int,int], 
-    savefig: str,
-    fontsize: int, 
     lags: int=10, 
     lamda: int=1600
 ):
     """
-    Plots the cross correlation (xcorr) of the simulated time-series for feature xfeature and yfeature with a 95% confidence interval (CI), calculated over all simulations,
-    and also plots the empirical time-series xcorr for a given xfeature and yfeature vector, each for a given number of lags.
+    Calculate the cross correlation (xcorr) of the simulated time-series for feature xfeature and yfeature with a 90% confidence interval (CI), calculated over all simulations,
+    each for a given number of lags.
     
     Parameters
     ----------
@@ -434,21 +512,13 @@ def plot_cross_correlation(
         yfeature : str
             name of the y feature column in both simulated and empirical DataFrames
         
-        figsize : tuple (int, int) 
-            size of figure (x-axis, y-axis)
-            
-        fontsize : int
-            fontsize of legend and ticks
-        
         lags: int
             number of correlation lags, in range (-lags, lags)
         
         lamda : int
             Hodrick-Prescott filter lambda parameter (quarterly => lambda=1600)
-            
-        savefig : str
-            path and figure name 
     """
+    plt.figure()
     assert xsimulated.shape == ysimulated.shape
     # array to store autocorrelation for each simulation
     sim_xcorr = np.zeros(shape=(xsimulated.shape[0], lags*2 + 1))
@@ -470,29 +540,63 @@ def plot_cross_correlation(
     emp_ycycle, emp_ytrend = sm.tsa.filters.hpfilter(yempirical, lamda)
     # empirical autocorrelation
     emp_xcorr = plt.xcorr(emp_xcycle, emp_ycycle, maxlags=lags)[1]
-    # clear figure
-    plt.clf()
-    # start figure
-    plt.figure(figsize=figsize)
+    plt.close()
+    return sim_xcorr_median, sim_xcorr_upper, sim_xcorr_lower, emp_xcorr
+
+def subplot_cross_correlation(
+    ax: plt.Axes,
+    xsimulated: np.typing.ArrayLike,
+    ysimulated: np.typing.ArrayLike,
+    xempirical: np.typing.ArrayLike,
+    yempirical: np.typing.ArrayLike,
+    fontsize: int, 
+    lags: int=10, 
+    lamda: int=1600
+):
+    """
+    Plots the cross correlation (xcorr) of the simulated time-series for feature xfeature and yfeature with a 95% confidence interval (CI), calculated over all simulations,
+    and also plots the empirical time-series xcorr for a given xfeature and yfeature vector, each for a given number of lags.
+    
+    Parameters
+    ----------
+        simulated : pandas.DataFrame
+            model simulated time-series with s simulations
+        
+        empirical : pandas.DataFrame
+            single empirical time-series
+        
+        xfeature : str
+            name of the x feature column in both simulated and empirical DataFrames
+        
+        yfeature : str
+            name of the y feature column in both simulated and empirical DataFrames
+            
+        fontsize : int
+            fontsize of legend and ticks
+        
+        lags: int
+            number of correlation lags, in range (-lags, lags)
+        
+        lamda : int
+            Hodrick-Prescott filter lambda parameter (quarterly => lambda=1600)
+    """
+    # cross correlations
+    sim_xcorr_median, sim_xcorr_upper, sim_xcorr_lower, emp_xcorr = cross_correlation(xsimulated, ysimulated, xempirical, yempirical, lags, lamda)
     # x values (lags)
     x = np.arange(0, lags*2 + 1)
     # plot empirical xcorr
-    plt.plot(emp_xcorr, color="k", linestyle="--", linewidth=1, label="Empirical")
+    ax.plot(emp_xcorr, color="k", linestyle="--", linewidth=1, label="Empirical")
     # plot median simulated xcorr
-    plt.plot(sim_xcorr_median, color="k", linewidth=1, label="Simulated")
+    ax.plot(sim_xcorr_median, color="k", linewidth=1, label="Simulated")
     # plot confidence interval
-    plt.fill_between(x, sim_xcorr_median, sim_xcorr_upper, color="grey", alpha=0.2, label="95% CI")
-    plt.fill_between(x, sim_xcorr_median, sim_xcorr_lower, color="grey", alpha=0.2)
+    ax.fill_between(x, sim_xcorr_median, sim_xcorr_upper, color="grey", alpha=0.2, label="90% IPR")
+    ax.fill_between(x, sim_xcorr_median, sim_xcorr_lower, color="grey", alpha=0.2)
     # plot 0 line
-    plt.axhline(0, color="k")
+    ax.axhline(0, color="k")
     # figure ticks
-    plt.yticks([1.00,0.75,0.50,0.25,0.00,-0.25,-0.50,-0.75,-1.00], ["1.00","0.75","0.50","0.25","0.00","–0.25","–0.50","–0.75","–1.00"], fontsize=fontsize)
-    plt.xticks([0,int(0.5*lags),int(lags),int(1.5*lags),int(2*lags)], [f"–{lags}",f"–{int(0.5*lags)}",0,int(0.5*lags),lags], fontsize=fontsize)
-    # legend
-    plt.legend(fontsize=fontsize, loc="upper right")
-    # save figure
-    plt.savefig(savefig, dpi=400, bbox_inches="tight")
-    plt.close()
+    ax.set_yticks([1.00,0.75,0.50,0.25,0.00,-0.25,-0.50,-0.75,-1.00], ["1.00","0.75","0.50","0.25","0.00","–0.25","–0.50","–0.75","–1.00"], fontsize=fontsize)
+    ax.set_xticks([0,int(0.5*lags),int(lags),int(1.5*lags),int(2*lags)], [f"–{lags}",f"–{int(0.5*lags)}",0,int(0.5*lags),lags], fontsize=fontsize)
+    ax.set_xlabel("Lags", fontsize=fontsize + 2)
 
 def fit_powerlaw(data: np.ndarray) -> tuple[float, float]:
     """
@@ -538,12 +642,11 @@ def fit_powerlaw(data: np.ndarray) -> tuple[float, float]:
 
     return best_alpha, best_xmin
 
-def plot_ccdf(
+def subplot_ccdf(
+    ax: plt.Axes,
     data: np.typing.ArrayLike,
-    figsize: tuple[int, int],
     fontsize: int,
     ylim: tuple[float, float] | None=None,
-    savefig: str | None=None,
     dp: int = 0,
 ) -> None:
     """
@@ -577,29 +680,24 @@ def plot_ccdf(
     ### plot fits ###
 
     # plot empirical CCDF
-    plt.figure(figsize=figsize)
-    plt.scatter(x, ccdf, color="lightgrey", edgecolors="k", alpha=0.7, s=30, label="Empirical CCDF",)
+    ax.scatter(x, ccdf, color="lightgrey", edgecolors="k", alpha=0.7, s=30, label="Empirical CCDF",)
     # power-law CCDF (rescaled at xmin)
     idx = np.searchsorted(x, xmin)
     rescale = ccdf[idx]
     powerlaw_ccdf = np.where(x >= xmin, (xmin / x) ** (alpha - 1) * rescale, np.nan)
     # plot power-law fit
-    plt.plot(x, powerlaw_ccdf, color="tab:cyan", linewidth=3, label=rf"Power law ($\alpha$ = {alpha:.2f})",)
+    ax.plot(x, powerlaw_ccdf, color="tab:cyan", linewidth=3, label=rf"Power law ($\alpha$ = {alpha:.2f})",)
     # xmin line
-    plt.axvline(xmin, color="k", linestyle=":", label=rf"$x_{{\min}}$ = {round(xmin, dp)}")
+    ax.axvline(xmin, color="k", linestyle=":", label=rf"$x_{{\min}}$ = {round(xmin, dp)}")
     # lognormal CCDF
     ln_ccdf = 1.0 - stats.lognorm.cdf(x, ln_shape, ln_loc, ln_scale)
-    plt.plot( x, ln_ccdf, color="tab:red", linestyle="--", linewidth=2, label="Log-normal")
+    ax.plot( x, ln_ccdf, color="tab:red", linestyle="--", linewidth=2, label="Log-normal")
 
     # plot settings
-    plt.loglog()
-    plt.legend(loc="lower left", fontsize=fontsize)
-    plt.xticks(fontsize=fontsize)
-    plt.yticks(fontsize=fontsize)
-    plt.ylim(ylim)
-    # save figure
-    plt.savefig(savefig, dpi=400, bbox_inches="tight")
-    plt.close()
+    ax.loglog()
+    ax.legend(loc="lower left", fontsize=fontsize)
+    ax.tick_params(axis='both', labelsize=fontsize)
+    ax.set_ylim(ylim)
 
     ### results summary ###
     print(f" - Power-law exponent (alpha) = {alpha:.4f}")

@@ -5,7 +5,7 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 from pathlib import Path
 from dynamin.utils import load_config, sql_engine
-from analysis.utils import load_macro_data, plot_autocorrelation, plot_cross_correlation, normality_tests, plot_ccdf, minskyan_test, debt_deflation_test
+from analysis.utils import load_macro_data, subplot_autocorrelation, subplot_cross_correlation, subplot_ccdf, normality_tests, minskyan_test, debt_deflation_test
 
 # is this analysis from the examples folder?
 is_true = input("Run stylised_facts.py analysis for an example from the examples folder [y/n]: ").lower().startswith("y")
@@ -20,8 +20,7 @@ if is_true:
 x_figsize = 10
 y_figsize = x_figsize/2
 # fontsize
-medium_fontsize = 25
-small_fontsize = 20
+fontsize = 18
 # upper decile 
 upper = 0.95
 # lower decile
@@ -29,8 +28,8 @@ lower = 0.05
 # update matplotlib pyplot settings
 plt.rcParams.update({
     "font.family": "serif",
-    "xtick.labelsize": medium_fontsize,
-    "ytick.labelsize": medium_fontsize,
+    "xtick.labelsize": fontsize,
+    "ytick.labelsize": fontsize,
 })
 
 ### Paths ###
@@ -128,127 +127,92 @@ sim_debt = macro_data.pivot(index="simulation_index", columns="time", values="de
 
 print("\nCreating single simulation time-series plots...")
 
-## plot GDP, investment, and consumption ### 
+# create figure with 3 rows, 2 columns
+fig, axes = plt.subplots(3, 2, figsize=(x_figsize*2, x_figsize*1.5), constrained_layout=True)
 
-# real GDP and components
-plt.figure(figsize=(x_figsize,y_figsize))
-# real GDP
-plt.plot(years, single_sim_data["real_gdp"], color="k", linewidth=1, label="GDP")
-# consumption
-plt.plot(years, single_sim_data["real_consumption"], color="k", linestyle="--", linewidth=1.2, label="Cons.")
-# investment
-plt.plot(years, single_sim_data["real_investment"], color="k", linestyle=":", linewidth=1.5, label="Inv.")
-# log y axis
-plt.yscale("log")
-# recession shaded
+# flatten axes for easy indexing
+ax0, ax1, ax2, ax3, ax4, ax5 = axes.flatten()
+
+### 1. GDP & components ###
+ax0.plot(years, single_sim_data["real_gdp"], color="k", linewidth=1, label="GDP")
+ax0.plot(years, single_sim_data["real_consumption"], color="k", linestyle="--", linewidth=1.2, label="Cons.")
+ax0.plot(years, single_sim_data["real_investment"], color="k", linestyle=":", linewidth=1.5, label="Inv.")
+ax0.set_yscale("log")
+ax0.legend(fontsize=0.8 * fontsize, loc="upper left")
 for t in single_sim_data["time"].loc[single_sim_data["recession"]==1]:
     i = t - start
-    if i > 0 and i < len(years):
-        plt.axvspan(years[i-1], years[i], facecolor="0.2", alpha=0.25)
-plt.yticks(fontsize=medium_fontsize)
-plt.xticks(fontsize=medium_fontsize)
-# legend
-plt.legend(fontsize=0.8 * medium_fontsize,loc="upper left")
-# save figure
-plt.savefig(figure_path / "time_series_outputs.png", dpi=400, bbox_inches="tight")
+    if 0 < i < len(years):
+        ax0.axvspan(years[i-1], years[i], facecolor="0.2", alpha=0.25)
+ax0.tick_params(labelsize=fontsize)
+ax0.set_ylabel(r"log(Output)", fontsize=fontsize + 2)
+ax0.set_xlabel("Years", fontsize=fontsize + 2)
+ax0.text(0.5, -0.2, "(a) GDP & Components", transform=ax0.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
-### GDP shares ###
-
-# output shares 
-plt.figure(figsize=(x_figsize,y_figsize))
-# plot debt ratio
-plt.plot(years, single_sim_data["debt_ratio"], color="k", linewidth=1, label=r"D/Y")
-# plot wage share 
-plt.plot(years, single_sim_data["wage_share"], color="k", linestyle="--", linewidth=1, label=r"W/Y")
-# plot profit share 
-plt.plot(years, single_sim_data["profit_share"], color="k", linestyle=":", linewidth=1, label=r"$\Pi$/Y")
-# plot labour productivity growth rate 
-plt.axhline(0, color="k", linestyle="--", linewidth=1)
-# recession shaded
+### 2. GDP shares ###
+ax1.plot(years, single_sim_data["debt_ratio"], color="k", linewidth=1, label="Debt Ratio")
+ax1.plot(years, single_sim_data["wage_share"], color="k", linestyle="--", linewidth=1, label="Wage Share")
+ax1.plot(years, single_sim_data["profit_share"], color="k", linestyle=":", linewidth=1, label="Profit Share")
+ax1.axhline(0, color="k", linestyle="--", linewidth=1)
+ax1.legend(fontsize=0.8 * fontsize, loc="lower left")
 for t in single_sim_data["time"].loc[single_sim_data["recession"]==1]:
     i = t - start
-    if i > 0 and i < len(years):
-        plt.axvspan(years[i-1], years[i], facecolor="0.2", alpha=0.25)
-# ticks
-plt.yticks(fontsize=medium_fontsize)
-plt.xticks(fontsize=medium_fontsize)
-# legend
-plt.legend(fontsize=0.8 * medium_fontsize, loc="lower left")
-# save figure
-plt.savefig(figure_path / "time_series_gdp_shares.png", dpi=400, bbox_inches="tight")
+    if 0 < i < len(years):
+        ax1.axvspan(years[i-1], years[i], facecolor="0.2", alpha=0.25)
+ax1.tick_params(labelsize=fontsize)
+ax1.set_ylabel("GDP Ratios", fontsize=fontsize + 2)
+ax1.set_xlabel("Years", fontsize=fontsize + 2)
+ax1.text(0.5, -0.2, "(b) GDP Ratios", transform=ax1.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
-### real GDP growth ###
-
-# real gdp growth
-plt.figure(figsize=(x_figsize,y_figsize))
-# plot 
-plt.plot(years, single_sim_data["rgdp_growth"], color="k", linewidth=1)
-# 0 line
-plt.axhline(0, color="k", linestyle="--", linewidth=1)
-# recession shaded
+### 3. real GDP growth ###
+ax2.plot(years, single_sim_data["rgdp_growth"], color="k", linewidth=1)
+ax2.axhline(0, color="k", linestyle="--", linewidth=1)
 for t in single_sim_data["time"].loc[single_sim_data["recession"]==1]:
     i = t - start
-    if i > 0 and i < len(years):
-        plt.axvspan(years[i-1], years[i], facecolor="0.2", alpha=0.25)
-# ticks
-plt.yticks(fontsize=medium_fontsize)
-plt.xticks(fontsize=medium_fontsize)
-# save figure
-plt.savefig(figure_path / "time_series_rgdp_growth.png", dpi=400, bbox_inches="tight")
+    if 0 < i < len(years):
+        ax2.axvspan(years[i-1], years[i], facecolor="0.2", alpha=0.25)
+ax2.tick_params(labelsize=fontsize)
+ax2.set_ylabel("Growth Rate", fontsize=fontsize + 2)
+ax2.set_xlabel("Years", fontsize=fontsize + 2)
+ax2.text(0.5, -0.2, "(c) Real GDP Growth", transform=ax2.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
-### inflation ###
-
-# figure
-plt.figure(figsize=(x_figsize,y_figsize))
-# plot
-plt.plot(years, single_sim_data["inflation"], color="k", linewidth=1)
-plt.axhline(0, color="k", linestyle="--", linewidth=1)
-# recession shaded
+### 4. inflation ###
+ax3.plot(years, single_sim_data["inflation"], color="k", linewidth=1)
+ax3.axhline(0, color="k", linestyle="--", linewidth=1)
 for t in single_sim_data["time"].loc[single_sim_data["recession"]==1]:
     i = t - start
-    if i > 0 and i < len(years):
-        plt.axvspan(years[i-1], years[i], facecolor="0.2", alpha=0.25)
-# ticks
-plt.yticks(fontsize=medium_fontsize)
-plt.xticks(fontsize=medium_fontsize)
-# save figure
-plt.savefig(figure_path / "time_series_inflation.png", dpi=400, bbox_inches="tight")
+    if 0 < i < len(years):
+        ax3.axvspan(years[i-1], years[i], facecolor="0.2", alpha=0.25)
+ax3.tick_params(labelsize=fontsize)
+ax3.set_ylabel("Inflation", fontsize=fontsize + 2)
+ax3.set_xlabel("Years", fontsize=fontsize + 2)
+ax3.text(0.5, -0.2, "(d) Inflation Rate", transform=ax3.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
-### unemployment ###
-
-# figure
-plt.figure(figsize=(x_figsize,y_figsize))
-# plot
-plt.plot(years, single_sim_data["unemployment_rate"], color="k", linewidth=1)
-plt.axhline(0, color="k", linestyle="--", linewidth=1)
-# recession shaded
+### 5. unemployment rate ###
+ax4.plot(years, single_sim_data["unemployment_rate"], color="k", linewidth=1)
+ax4.axhline(0, color="k", linestyle="--", linewidth=1)
 for t in single_sim_data["time"].loc[single_sim_data["recession"]==1]:
     i = t - start
-    if i > 0 and i < len(years):
-        plt.axvspan(years[i-1], years[i], facecolor="0.2", alpha=0.25)
-# ticks
-plt.yticks(fontsize=medium_fontsize)
-plt.xticks(fontsize=medium_fontsize)
-# save figure
-plt.savefig(figure_path / "time_series_unemployment_rate.png", dpi=400, bbox_inches="tight")
+    if 0 < i < len(years):
+        ax4.axvspan(years[i-1], years[i], facecolor="0.2", alpha=0.25)
+ax4.tick_params(labelsize=fontsize)
+ax4.set_ylabel("Unemployment", fontsize=fontsize + 2)
+ax4.set_xlabel("Years", fontsize=fontsize + 2)
+ax4.text(0.5, -0.2, "(e) Unemployment Rate", transform=ax4.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
-### credit rate (total debt growth rate) ###
-
-# figure
-plt.figure(figsize=(x_figsize,y_figsize))
-# plot 
-plt.plot(years, single_sim_data["credit_rate"], color="k", linewidth=1)
-plt.axhline(0, color="k", linestyle="--", linewidth=1)
-# recession shaded
+### 6. credit rate ###
+ax5.plot(years, single_sim_data["credit_rate"], color="k", linewidth=1)
+ax5.axhline(0, color="k", linestyle="--", linewidth=1)
 for t in single_sim_data["time"].loc[single_sim_data["recession"]==1]:
     i = t - start
-    if i > 0 and i < len(years):
-        plt.axvspan(years[i-1], years[i], facecolor="0.2", alpha=0.25)
-# ticks
-plt.yticks(fontsize=medium_fontsize)
-plt.xticks(fontsize=medium_fontsize)
+    if 0 < i < len(years):
+        ax5.axvspan(years[i-1], years[i], facecolor="0.2", alpha=0.25)
+ax5.tick_params(labelsize=fontsize)
+ax5.set_ylabel("Credit", fontsize=fontsize + 2)
+ax5.set_xlabel("Years", fontsize=fontsize + 2)
+ax5.text(0.5, -0.2, "(f) Credit Rate", transform=ax5.transAxes, ha="center", va="top", fontsize=fontsize + 5)
+
 # save figure
-plt.savefig(figure_path / "time_series_credit_rate.png", dpi=400, bbox_inches="tight")
+plt.savefig(figure_path / "time_series_single_sim.png", dpi=400, bbox_inches="tight")
 
 ###------------------------------###
 ### macroeconomic stylised facts ###
@@ -266,29 +230,38 @@ print("\n1. Minskyan Cycles")
 
 print("- pro-cyclical debt")
 
-print("  - cross-correlation real GDP & corporate debt")
+print("  - cross-correlations with corporate debt")
 
-plot_cross_correlation(
+fig, axes = plt.subplots(1, 2, figsize=(x_figsize * 1.75, y_figsize), constrained_layout=True)
+
+ax0 = axes[0]
+
+subplot_cross_correlation(
+    ax=ax0,
     xsimulated=sim_real_gdp,
     ysimulated=sim_debt,
     xempirical=emp_real_gdp,
     yempirical=emp_debt,
-    figsize=(x_figsize,y_figsize),
-    fontsize=medium_fontsize,
-    savefig=figure_path / "ccf_gdp_debt"
+    fontsize=fontsize,
 )
 
-print("  - cross-correlation corporate debt & unemployment rate")
+ax0.text(0.5, -0.25, "(a) Real GDP & Debt", transform=ax0.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
-plot_cross_correlation(
+ax1 = axes[1]
+
+subplot_cross_correlation(
+    ax=ax1,
     xsimulated=sim_debt,
     ysimulated=sim_unemployment_rate,
     xempirical=emp_debt,
     yempirical=emp_unemployment_rate,
-    figsize=(x_figsize,y_figsize),
-    fontsize=medium_fontsize,
-    savefig=figure_path / "ccf_debt_unemployment"
+    fontsize=fontsize,
 )
+
+ax1.legend(fontsize=0.8 *fontsize, loc="upper right")
+ax1.text(0.5, -0.25, "(b) Debt & Unemployment", transform=ax1.transAxes, ha="center", va="top", fontsize=fontsize + 5)
+
+plt.savefig(figure_path / "minskyan_ccf.png", dpi=800, bbox_inches="tight")
 
 print("- pre-recession peak of credit rate and debt ratio")
 
@@ -310,37 +283,49 @@ debt_arr   = np.array(debt_windows)
 window     = credit_arr.shape[1] // 2
 lag_axis   = np.arange(-window, window + 1) / steps   # convert to years
 
-### credit rate plot ###
-pre_credit_mean        = credit_arr[:, :window].mean(axis=1, keepdims=True)
-credit_arr_norm        = credit_arr - pre_credit_mean
-credit_median_path     = np.quantile(credit_arr_norm, 0.5,      axis=0)
-credit_lower_path      = np.quantile(credit_arr_norm, lower,  axis=0)
-credit_upper_path      = np.quantile(credit_arr_norm, upper,  axis=0)
+# credit rate plot
+pre_credit_mean = credit_arr[:, :window].mean(axis=1, keepdims=True)
+credit_arr_norm = credit_arr - pre_credit_mean
+credit_median_path = np.quantile(credit_arr_norm, 0.5,      axis=0)
+credit_lower_path = np.quantile(credit_arr_norm, lower,  axis=0)
+credit_upper_path = np.quantile(credit_arr_norm, upper,  axis=0)
 
-fig, ax = plt.subplots(figsize=(x_figsize, y_figsize))
-ax.plot(lag_axis, credit_median_path, color="k", linewidth=1.5, label="Median")
-ax.fill_between(lag_axis, credit_lower_path, credit_upper_path, alpha=0.20, color="grey", label="90% IPR")
-ax.axvline(0, color="black", linewidth=0.8, linestyle="--", label="Recession start")
-ax.axhline(0, color="black", linewidth=0.5)
-ax.tick_params(axis="both", labelsize=medium_fontsize)
-ax.legend(fontsize=0.8 * medium_fontsize)
-plt.savefig(figure_path / "recession_credit_rate.png", dpi=400, bbox_inches="tight")
+# debt ratio plot 
+pre_debt_mean = debt_arr[:, :window].mean(axis=1, keepdims=True)
+debt_arr_norm = debt_arr - pre_debt_mean
+debt_median_path = np.quantile(debt_arr_norm, 0.5,    axis=0)
+debt_lower_path = np.quantile(debt_arr_norm, lower,  axis=0)
+debt_upper_path = np.quantile(debt_arr_norm, upper,  axis=0)
 
-### debt ratio plot ###
-pre_debt_mean        = debt_arr[:, :window].mean(axis=1, keepdims=True)
-debt_arr_norm        = debt_arr - pre_debt_mean
-debt_median_path     = np.quantile(debt_arr_norm, 0.5,    axis=0)
-debt_lower_path      = np.quantile(debt_arr_norm, lower,  axis=0)
-debt_upper_path      = np.quantile(debt_arr_norm, upper,  axis=0)
+### plot results ##
+fig, axes = plt.subplots(1, 2, figsize=(x_figsize * 1.75, y_figsize), constrained_layout=True)
 
-fig, ax = plt.subplots(figsize=(x_figsize, y_figsize))
-ax.plot(lag_axis, debt_median_path, color="k", linewidth=1.5, label="Median")
-ax.fill_between(lag_axis, debt_lower_path, debt_upper_path, alpha=0.20, color="grey", label="90% IPR")
-ax.axvline(0, color="black", linewidth=0.8, linestyle="--", label="Recession start")
-ax.axhline(0, color="black", linewidth=0.5)
-ax.tick_params(axis="both", labelsize=medium_fontsize)
-ax.legend(fontsize=0.8 * medium_fontsize)
-plt.savefig(figure_path / "recession_debt_ratio.png", dpi=400, bbox_inches="tight")
+# credit rate 
+ax0 = axes[0]
+ax0.plot(lag_axis, credit_median_path, color="k", linewidth=1.5)
+ax0.fill_between(lag_axis, credit_lower_path, credit_upper_path, alpha=0.20, color="grey")
+ax0.axvline(0, color="black", linewidth=0.8, linestyle="--")
+ax0.axhline(0, color="black", linewidth=0.5)
+ax0.tick_params(axis="both", labelsize=fontsize)
+ax0.set_ylabel("Credit Rate", fontsize=fontsize + 2)
+ax0.set_xlabel("Lag (Years)", fontsize=fontsize + 2)
+ax0.text(0.5, -0.2, "(a) Credit Rate", transform=ax0.transAxes, ha="center", va="top", fontsize=fontsize + 5)
+
+# debt ratio 
+ax1 = axes[1]
+ax1.plot(lag_axis, debt_median_path, color="k", linewidth=1.5, label="Median")
+ax1.fill_between(lag_axis, debt_lower_path, debt_upper_path, alpha=0.20, color="grey", label="90% IPR")
+ax1.axvline(0, color="black", linewidth=0.8, linestyle="--", label="Recession start")
+ax1.axhline(0, color="black", linewidth=0.5)
+ax1.tick_params(axis="both", labelsize=fontsize)
+ax1.set_ylabel("Debt Ratio", fontsize=fontsize + 2)
+ax1.set_xlabel("Lag (Years)", fontsize=fontsize + 2)
+ax1.text(0.5, -0.2, "(b) Debt Ratio", transform=ax1.transAxes, ha="center", va="top", fontsize=fontsize + 5)
+
+# legend
+plt.legend(fontsize=0.8 * fontsize)
+# save single figure
+plt.savefig(figure_path / "minsky_recessions.png", dpi=800, bbox_inches="tight")
 
 ### 2. Debt-deflation ###
 
@@ -357,20 +342,23 @@ print(f"- share Fisher debt-inflation cycles (inflation & debt-ratio peak before
 inflation_arr = np.array(inflation_windows)
 
 ### inflation rate plot ###
-pre_inflation_mean        = inflation_arr[:, :window].mean(axis=1, keepdims=True)
-inflation_arr_norm        = inflation_arr - pre_inflation_mean
-inflation_median_path     = np.quantile(inflation_arr_norm, 0.5,      axis=0)
-inflation_lower_path      = np.quantile(inflation_arr_norm, lower,  axis=0)
-inflation_upper_path      = np.quantile(inflation_arr_norm, upper,  axis=0)
+pre_inflation_mean = inflation_arr[:, :window].mean(axis=1, keepdims=True)
+inflation_arr_norm = inflation_arr - pre_inflation_mean
+inflation_median_path = np.quantile(inflation_arr_norm, 0.5,      axis=0)
+inflation_lower_path = np.quantile(inflation_arr_norm, lower,  axis=0)
+inflation_upper_path = np.quantile(inflation_arr_norm, upper,  axis=0)
 
 fig, ax = plt.subplots(figsize=(x_figsize, y_figsize))
 ax.plot(lag_axis, inflation_median_path, color="k", linewidth=1.5, label="Median")
 ax.fill_between(lag_axis, inflation_lower_path, inflation_upper_path, alpha=0.20, color="grey", label="90% IPR")
 ax.axvline(0, color="black", linewidth=0.8, linestyle="--", label="Recession start")
 ax.axhline(0, color="black", linewidth=0.5)
-ax.tick_params(axis="both", labelsize=medium_fontsize)
-ax.legend(fontsize=0.8 * medium_fontsize)
-plt.savefig(figure_path / "recession_inflation.png", dpi=400, bbox_inches="tight")
+ax.tick_params(axis="both", labelsize=fontsize)
+ax.legend(fontsize=0.8 * fontsize)
+ax.tick_params(axis="both", labelsize=fontsize)
+ax.set_ylabel("Inflation", fontsize=fontsize + 2)
+ax.set_xlabel("Lag (Years)", fontsize=fontsize + 2)
+plt.savefig(figure_path / "debt_deflation_recessions.png", dpi=800, bbox_inches="tight")
 
 ### 3. real gdp growth shape ###
 
@@ -403,10 +391,12 @@ plt.plot(x, norm_pdf, color="k", linewidth=1, label="Normal", linestyle=":")
 plt.ylim([0.008,50])
 plt.xlim([-0.12,0.14])
 plt.yscale("log")
-plt.yticks(fontsize=small_fontsize)
-plt.xticks(fontsize=small_fontsize)
-plt.legend(fontsize=0.8 * small_fontsize, loc="upper right")
-plt.savefig(figure_path / "dist_rgdp_growth.png", dpi=400, bbox_inches="tight")
+plt.yticks(fontsize=fontsize)
+plt.xticks(fontsize=fontsize)
+plt.xlabel("Real GDP Growth Rate", fontsize=fontsize + 2)
+plt.ylabel("log(density)", fontsize=fontsize + 2)
+plt.legend(fontsize=0.8 * fontsize, loc="upper right")
+plt.savefig(figure_path / "dist_rgdp_growth.png", dpi=800, bbox_inches="tight")
 
 print("- created real GDP growth rate distribution plot")
 print("- distribution fit parameters:")
@@ -460,25 +450,34 @@ else:
 
     # update matplotlib pyplot settings
 
-
-    # plot power-law fit 
-    fig, ax = plt.subplots(figsize=(x_figsize,y_figsize * 1.5))
-    ax.scatter(unique_durations, pdf, color="navy", edgecolors="k", s=40, label="Simulated PDF")
-    ax.plot(unique_durations, pdf_powerlaw, color="k", linewidth=2, label=rf"Power law ($\alpha$ = {alpha:.2f})")
-    ax.set_yscale("log")
-    ax.set_xscale("log")
-    ax.legend(fontsize=0.8 * medium_fontsize)
-    ax.tick_params(axis="both", labelsize=medium_fontsize)
-    plt.savefig(figure_path / "dist_recession_duration_powerlaw.png", dpi=400, bbox_inches="tight")
+    ### plot results ###
+    fig, axes = plt.subplots(1, 2, figsize=(x_figsize * 1.75, y_figsize), constrained_layout=True)
 
     # plot exponential fit 
-    fig, ax = plt.subplots(figsize=(x_figsize,y_figsize * 1.5))
-    ax.scatter(unique_durations, pdf, color="navy", edgecolors="k", s=40, label="Simulated PDF")
-    ax.plot(unique_durations, pdf_exp, color="k", linewidth=2, label=rf"Exponential ($\lambda$ = {lambda_exp:.2f})")
-    ax.set_yscale("log")
-    ax.legend(fontsize=0.8 * medium_fontsize)
-    ax.tick_params(axis="both", labelsize=medium_fontsize)
-    plt.savefig(figure_path / "dist_recession_duration_exponential.png", dpi=400, bbox_inches="tight")
+    ax0 = axes[0]
+    ax0.scatter(unique_durations, pdf, color="navy", edgecolors="k", s=40, label="Simulated PDF")
+    ax0.plot(unique_durations, pdf_exp, color="k", linewidth=2, label=rf"Exponential ($\lambda$ = {lambda_exp:.2f})")
+    ax0.set_yscale("log")
+    ax0.tick_params(axis="both", labelsize=fontsize)
+    ax0.set_xlabel("Recession Duration", fontsize=fontsize + 2)
+    ax0.set_ylabel("log(density)", fontsize=fontsize + 2)
+    ax0.legend(fontsize=0.8 * fontsize)
+    ax0.text(0.5, -0.2, "(a) Exponential Fit", transform=ax0.transAxes, ha="center", va="top", fontsize=fontsize + 5)
+
+    # plot power-law fit 
+    ax1 = axes[1]
+    ax1.scatter(unique_durations, pdf, color="navy", edgecolors="k", s=40, label="Simulated PDF")
+    ax1.plot(unique_durations, pdf_powerlaw, color="k", linewidth=2, label=rf"Power law ($\alpha$ = {alpha:.2f})")
+    ax1.set_yscale("log")
+    ax1.set_xscale("log")
+    ax1.tick_params(axis="both", labelsize=fontsize)
+    ax1.set_xlabel("log(Recession Duration)", fontsize=fontsize + 2)
+    ax1.set_ylabel("log(density)", fontsize=fontsize + 2)
+    ax1.legend(fontsize=0.8 * fontsize)
+    ax1.text(0.5, -0.2, "(b) Power-law Fit", transform=ax1.transAxes, ha="center", va="top", fontsize=fontsize + 5)
+
+    # save figure
+    plt.savefig(figure_path / "dist_recession_duration.png", dpi=800, bbox_inches="tight")
 
     # print results
     print(f"- number of recession periods = {len(durations)}")
@@ -501,118 +500,151 @@ else:
 
 print("\n5. Autocorrelation of macro variables")
 
+fig, axes = plt.subplots(3, 2, figsize=(x_figsize * 1.75, x_figsize * 1.5), constrained_layout=True)
+
 print("- real GDP autocorrelation plot")
 
-plot_autocorrelation(
+ax00 = axes[0,0]
+subplot_autocorrelation(
+    ax=ax00,
     simulated=sim_real_gdp,
     empirical=emp_real_gdp,
-    figsize=(x_figsize, y_figsize),
-    fontsize=medium_fontsize,
-    savefig=figure_path / "acf_real_gdp.png"
+    fontsize=fontsize,
 )
 
-print("- consumption autocorrelation plot")
-
-plot_autocorrelation(
-    simulated=sim_consumption,
-    empirical=emp_consumption,
-    figsize=(x_figsize, y_figsize),
-    fontsize=medium_fontsize,
-    savefig=figure_path / "acf_consumption.png"
-)
-
-print("- investment autocorrelation plot")
-
-plot_autocorrelation(
-    simulated=sim_investment,
-    empirical=emp_investment,
-    figsize=(x_figsize, y_figsize),
-    fontsize=medium_fontsize,
-    savefig=figure_path / "acf_investment.png"
-)
+ax00.text(0.5, -0.2, "(a) Real GDP", transform=ax00.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
 print("- productivity autocorrelation plot")
 
-plot_autocorrelation(
+ax01 = axes[0,1]
+subplot_autocorrelation(
+    ax=ax01,
     simulated=sim_productivity,
     empirical=emp_productivity,
-    figsize=(x_figsize, y_figsize),
-    fontsize=medium_fontsize,
-    savefig=figure_path / "acf_productivity.png"
+    fontsize=fontsize,
 )
+
+ax01.legend(fontsize=0.8 *fontsize, loc="upper right")
+ax01.text(0.5, -0.2, "(b) Productivity", transform=ax01.transAxes, ha="center", va="top", fontsize=fontsize + 5)
+
+print("- consumption autocorrelation plot")
+
+ax10 = axes[1,0]
+subplot_autocorrelation(
+    ax=ax10,
+    simulated=sim_consumption,
+    empirical=emp_consumption,
+    fontsize=fontsize,
+)
+
+ax10.text(0.5, -0.2, "(c) Consumption", transform=ax10.transAxes, ha="center", va="top", fontsize=fontsize + 5)
+
+print("- investment autocorrelation plot")
+
+ax11 = axes[1,1]
+subplot_autocorrelation(
+    ax=ax11,
+    simulated=sim_investment,
+    empirical=emp_investment,
+    fontsize=fontsize,
+)
+
+ax11.text(0.5, -0.2, "(d) Investment", transform=ax11.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
 print("- unemployment rate autocorrelation plot")
 
-plot_autocorrelation(
+ax20 = axes[2,0]
+subplot_autocorrelation(
+    ax=ax20,
     simulated=sim_unemployment_rate,
     empirical=emp_unemployment_rate,
-    figsize=(x_figsize, y_figsize),
-    fontsize=medium_fontsize,
-    savefig=figure_path / "acf_unemployment_rate.png"
+    fontsize=fontsize,
 )
+
+ax20.text(0.5, -0.2, "(e) Unemployment Rate", transform=ax20.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
 print("- corporate debt autocorrelation plot")
 
-plot_autocorrelation(
+ax21 = axes[2,1]
+subplot_autocorrelation(
+    ax=ax21,
     simulated=sim_debt,
     empirical=emp_debt,
-    figsize=(x_figsize, y_figsize),
-    fontsize=medium_fontsize,
-    savefig=figure_path / "acf_debt.png"
+    fontsize=fontsize,
 )
+
+ax21.text(0.5, -0.2, "(f) Corporate Debt", transform=ax21.transAxes, ha="center", va="top", fontsize=fontsize + 5)
+
+plt.savefig(figure_path / "autocorrelations.png", dpi=800, bbox_inches="tight")
 
 ### 6. Cross-correlation between macro variables ###
 
 print("\n6. Cross-correlation between macro variables")
 
+fig, axes = plt.subplots(2, 2, figsize=(x_figsize * 1.75, x_figsize), constrained_layout=True)
+
 print("- cross-correlation real GDP & real GDP")
 
-plot_cross_correlation(
+ax00 = axes[0,0]
+
+subplot_cross_correlation(
+    ax=ax00,
     xsimulated=sim_real_gdp,
     ysimulated=sim_real_gdp,
     xempirical=emp_real_gdp,
     yempirical=emp_real_gdp,
-    figsize=(x_figsize,y_figsize),
-    fontsize=medium_fontsize,
-    savefig=figure_path / "ccf_gdp_gdp.png"
+    fontsize=fontsize,
 )
 
+ax00.text(0.5, -0.2, "(a) Real GDP & Real GDP", transform=ax00.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
 print("- cross-correlation real GDP & consumption")
 
-plot_cross_correlation(
+ax01 = axes[0,1]
+
+subplot_cross_correlation(
+    ax=ax01,
     xsimulated=sim_real_gdp,
     ysimulated=sim_consumption,
     xempirical=emp_real_gdp,
     yempirical=emp_consumption,
-    figsize=(x_figsize,y_figsize),
-    fontsize=medium_fontsize,
-    savefig=figure_path / "ccf_gdp_consumption.png"
+    fontsize=fontsize,
 )
+
+ax01.legend(fontsize=0.8 *fontsize, loc="upper right")
+ax01.text(0.5, -0.2, "(b) Real GDP & Consumption", transform=ax01.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
 print("- cross-correlation real GDP & investment")
 
-plot_cross_correlation(
+ax10 = axes[1,0]
+
+subplot_cross_correlation(
+    ax=ax10,
     xsimulated=sim_real_gdp,
     ysimulated=sim_investment,
     xempirical=emp_real_gdp,
     yempirical=emp_investment,
-    figsize=(x_figsize,y_figsize),
-    fontsize=medium_fontsize,
-    savefig=figure_path / "ccf_gdp_investment.png"
+    fontsize=fontsize,
 )
+
+ax10.text(0.5, -0.2, "(c) Real GDP & Investment", transform=ax10.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
 print("- cross-correlation real GDP & unemployment rate")
 
-plot_cross_correlation(
+ax11 = axes[1,1]
+
+subplot_cross_correlation(
+    ax=ax11,
     xsimulated=sim_real_gdp,
     ysimulated=sim_unemployment_rate,
     xempirical=emp_real_gdp,
     yempirical=emp_unemployment_rate,
-    figsize=(x_figsize,y_figsize),
-    fontsize=medium_fontsize,
-    savefig=figure_path / "ccf_gdp_unemployment.png"
+    fontsize=fontsize,
 )
+
+ax11.text(0.5, -0.2, "(d) Real GDP & Unemployment Rate", transform=ax11.transAxes, ha="center", va="top", fontsize=fontsize + 5)
+
+plt.savefig(figure_path / "cross_correlations.png", dpi=800, bbox_inches="tight")
 
 ### 7. volatility hierarchy ###
 
@@ -640,7 +672,7 @@ sd_cons_std = cons_std_by_sim.std()
 
 emp_consumption_growth = np.log(emp_consumption[steps:-1]) - np.log(emp_consumption[1:-steps])
 
-print("- consumption growth volatilty")
+print("- consumption growth volatility")
 print(f"  - empirical standard deviation: {round(emp_consumption_growth.std() * 100,4)}%")
 print("  - model standard deviation:")
 print(f"  - average = {round(mean_cons_std * 100,4)}%")
@@ -660,7 +692,11 @@ print("  - model standard deviation:")
 print(f"    - average = {round(mean_inv_std * 100,4)}%")
 print(f"    - standard deviation = {round(sd_inv_std * 100,4)}%")
 
-### 8. relationship between credit and unemployment
+### economic relationships ###
+
+fig, axes = plt.subplots(2, 2, figsize=(x_figsize * 1.75, x_figsize), constrained_layout=True)
+
+### 8. relationship between credit and unemployment ###
 
 print("\n8. Credit & unemployment relationship")
 
@@ -668,14 +704,14 @@ print("\n8. Credit & unemployment relationship")
 credit_model = sm.OLS(single_sim_data["credit_rate"], sm.add_constant(single_sim_data["unemployment_rate"]))
 credit_results = credit_model.fit()
 # plot results
-plt.figure(figsize=(10,5))
-plt.scatter(x=single_sim_data["unemployment_rate"], y=single_sim_data["credit_rate"], color="skyblue", s=30, edgecolors="k")
-plt.plot(single_sim_data["unemployment_rate"], credit_results.params["const"] + credit_results.params["unemployment_rate"]*single_sim_data["unemployment_rate"], color="r", linewidth=1)
+ax00 = axes[0,0]
+ax00.scatter(x=single_sim_data["unemployment_rate"], y=single_sim_data["credit_rate"], color="skyblue", s=30, edgecolors="k")
+ax00.plot(single_sim_data["unemployment_rate"], credit_results.params["const"] + credit_results.params["unemployment_rate"]*single_sim_data["unemployment_rate"], color="r", linewidth=1)
 # ticks
-plt.yticks(fontsize=medium_fontsize)
-plt.xticks(fontsize=medium_fontsize)
-# save figure
-plt.savefig(figure_path / "credit_curve.png", dpi=400, bbox_inches="tight")
+ax00.tick_params(axis="both", labelsize=fontsize)
+ax00.set_xlabel("Unemployment Rate", fontsize=fontsize + 2)
+ax00.set_ylabel("Credit Rate", fontsize=fontsize + 2)
+ax00.text(0.5, -0.2, "(a) Credit Rate & Unemployment Rate", transform=ax00.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 # print results
 print("- results:")
 print(f"  - intercept = {credit_results.params["const"]:.4f}")
@@ -690,12 +726,14 @@ print("\n9. Okun curve")
 okun_model = sm.OLS(single_sim_data["rgdp_growth"], sm.add_constant(single_sim_data["change_unemployment"]))
 okun_results = okun_model.fit()
 # plot results
-plt.figure(figsize=(10,5))
-plt.scatter(x=single_sim_data["change_unemployment"], y=single_sim_data["rgdp_growth"], color="skyblue", s=30, edgecolors="k")
-plt.plot(single_sim_data["change_unemployment"], okun_results.params["const"] + okun_results.params["change_unemployment"]*single_sim_data["change_unemployment"], color="r", linewidth=1)
+ax01 = axes[0,1]
+ax01.scatter(x=single_sim_data["change_unemployment"], y=single_sim_data["rgdp_growth"], color="skyblue", s=30, edgecolors="k")
+ax01.plot(single_sim_data["change_unemployment"], okun_results.params["const"] + okun_results.params["change_unemployment"]*single_sim_data["change_unemployment"], color="r", linewidth=1)
 # ticks
-plt.yticks(fontsize=medium_fontsize)
-plt.xticks(fontsize=medium_fontsize)
+ax01.tick_params(axis="both", labelsize=fontsize)
+ax01.set_xlabel("Change in Unemployment Rate", fontsize=fontsize + 2)
+ax01.set_ylabel("Real GDP Growth", fontsize=fontsize + 2)
+ax01.text(0.5, -0.2, "(b) Okun Curve", transform=ax01.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 # save figure
 plt.savefig(figure_path / "okun_curve.png", dpi=400, bbox_inches="tight")
 # print results
@@ -712,14 +750,14 @@ print("\n10. wage-phillips curve")
 wpc_model = sm.OLS(single_sim_data["wage_inflation"], sm.add_constant(single_sim_data["unemployment_rate"]))
 wpc_results = wpc_model.fit()
 # plot results
-plt.figure(figsize=(10,5))
-plt.scatter(x=single_sim_data["unemployment_rate"], y=single_sim_data["wage_inflation"], color="skyblue", s=30, edgecolors="k")
-plt.plot(single_sim_data["unemployment_rate"], wpc_results.params["const"] + wpc_results.params["unemployment_rate"]*single_sim_data["unemployment_rate"], color="r", linewidth=1)
+ax10 = axes[1,0]
+ax10.scatter(x=single_sim_data["unemployment_rate"], y=single_sim_data["wage_inflation"], color="skyblue", s=30, edgecolors="k")
+ax10.plot(single_sim_data["unemployment_rate"], wpc_results.params["const"] + wpc_results.params["unemployment_rate"]*single_sim_data["unemployment_rate"], color="r", linewidth=1)
 # ticks
-plt.yticks(fontsize=medium_fontsize)
-plt.xticks(fontsize=medium_fontsize)
-# save figure
-plt.savefig(figure_path / "phillips_curve_wage.png", dpi=400, bbox_inches="tight")
+ax10.tick_params(axis="both", labelsize=fontsize)
+ax10.set_xlabel("Unemployment Rate", fontsize=fontsize + 2)
+ax10.set_ylabel("Wage Inflation", fontsize=fontsize + 2)
+ax10.text(0.5, -0.2, "(c) Wage-Phillips Curve", transform=ax10.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 # print results
 print("- results:")
 print(f"  - intercept = {wpc_results.params["const"]:.4f}")
@@ -734,19 +772,22 @@ print("\n11. price-Phillips curve")
 ppc_model = sm.OLS(single_sim_data["inflation"], sm.add_constant(single_sim_data["unemployment_rate"]))
 ppc_results = ppc_model.fit()
 # plot results
-plt.figure(figsize=(10,5))
-plt.scatter(x=single_sim_data["unemployment_rate"], y=single_sim_data["inflation"], color="skyblue", s=30, edgecolors="k")
-plt.plot(single_sim_data["unemployment_rate"], ppc_results.params["const"] + ppc_results.params["unemployment_rate"]*single_sim_data["unemployment_rate"], color="r", linewidth=1)
+ax11 = axes[1,1]
+ax11.scatter(x=single_sim_data["unemployment_rate"], y=single_sim_data["inflation"], color="skyblue", s=30, edgecolors="k")
+ax11.plot(single_sim_data["unemployment_rate"], ppc_results.params["const"] + ppc_results.params["unemployment_rate"]*single_sim_data["unemployment_rate"], color="r", linewidth=1)
 # ticks
-plt.yticks(fontsize=medium_fontsize)
-plt.xticks(fontsize=medium_fontsize)
-# save figure
-plt.savefig(figure_path / "phillips_curve_inflation.png", dpi=400, bbox_inches="tight")
+ax11.tick_params(axis="both", labelsize=fontsize)
+ax11.set_xlabel("Unemployment Rate", fontsize=fontsize + 2)
+ax11.set_ylabel("Price Inflation", fontsize=fontsize + 2)
+ax11.text(0.5, -0.2, "(d) Price-Phillips Curve", transform=ax11.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 # print results
 print("- results:")
 print(f"  - intercept = {ppc_results.params["const"]:.4f}")
 print(f"  - slope = {ppc_results.params["unemployment_rate"]:.4f}")
 print(f"  - R-squared = {ppc_results.rsquared:.4f}")
+
+# save figure
+plt.savefig(figure_path / "relationships.png", dpi=800, bbox_inches="tight")
 
 ###------------------------------###
 ### microeconomic stylised facts ###
@@ -928,18 +969,20 @@ cfirm_laplace_pdf = stats.laplace.pdf(cfirm_x, cfirm_laplace_params[0], cfirm_la
 cfirm_norm_params = stats.norm.fit(large_snapshot_cfirms["output_growth"])
 cfirm_norm_pdf = stats.norm.pdf(cfirm_x, cfirm_norm_params[0], cfirm_norm_params[1])
 
-plt.figure(figsize=(x_figsize,x_figsize/1.3))
-plt.scatter((cfirm_bins[1:] + cfirm_bins[:-1])/2, cfirm_density, facecolors="none", edgecolors="k", marker="o", label="Simulated")
-plt.plot(cfirm_x, cfirm_gennorm_pdf, color="k", linewidth=1, label="Subbotin")
-plt.plot(cfirm_x, cfirm_laplace_pdf, color="k", linestyle="--", linewidth=1, label="Laplace")
-plt.plot(cfirm_x, cfirm_norm_pdf, color="k", linestyle=":", linewidth=1, label="Normal")
-plt.ylim([0.0005,10])
-plt.xlim([-3.05,3.05])
-plt.yscale("log")
-plt.yticks(fontsize=medium_fontsize)
-plt.xticks(fontsize=medium_fontsize)
-plt.legend(fontsize=0.8 * medium_fontsize, loc="upper right")
-plt.savefig(figure_path / "dist_cfirm_growth.png", dpi=400, bbox_inches="tight")
+fig, axes = plt.subplots(1, 2, figsize=(x_figsize * 1.75, x_figsize * 0.75), constrained_layout=True)
+
+ax0 = axes[0]
+ax0.scatter((cfirm_bins[1:] + cfirm_bins[:-1])/2, cfirm_density, facecolors="none", edgecolors="k", marker="o", label="Simulated")
+ax0.plot(cfirm_x, cfirm_gennorm_pdf, color="k", linewidth=1, label="Subbotin")
+ax0.plot(cfirm_x, cfirm_laplace_pdf, color="k", linestyle="--", linewidth=1, label="Laplace")
+ax0.plot(cfirm_x, cfirm_norm_pdf, color="k", linestyle=":", linewidth=1, label="Normal")
+ax0.set_ylim([0.0002,10])
+ax0.set_xlim([-3.05,3.05])
+ax0.set_yscale("log")
+ax0.tick_params(axis="both", labelsize=fontsize)
+ax0.set_xlabel("C-Firm Output Growth Rate", fontsize=fontsize + 2)
+ax0.set_ylabel("log(density)", fontsize=fontsize + 2)
+ax0.text(0.5, -0.15, "(a) C-Firms Output Growth Distribution", transform=ax0.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 print(f"  - subbotin fit\n    - beta = {cfirm_gennorm_params[0]}\n    - mu = {cfirm_gennorm_params[1]}\n    - alpha = {cfirm_gennorm_params[2]}")
 print(f"  - laplace fit\n    - mu = {cfirm_laplace_params[0]}\n    - alpha = {cfirm_laplace_params[1]}")
 print(f"  - norm fit\n    - mu = {cfirm_norm_params[0]}\n    - alpha = {cfirm_norm_params[1]}")
@@ -970,18 +1013,20 @@ kfirm_laplace_pdf = stats.laplace.pdf(kfirm_x, kfirm_laplace_params[0], kfirm_la
 kfirm_norm_params = stats.norm.fit(large_snapshot_kfirms["output_growth"])
 kfirm_norm_pdf = stats.norm.pdf(kfirm_x, kfirm_norm_params[0], kfirm_norm_params[1])
 
-plt.figure(figsize=(x_figsize,x_figsize/1.3))
-plt.scatter((kfirm_bins[1:] + kfirm_bins[:-1])/2, kfirm_density, facecolors="none", edgecolors="k", marker="o", label="Simulated")
-plt.plot(kfirm_x, kfirm_gennorm_pdf, color="k", linewidth=1, label="Subbotin")
-plt.plot(kfirm_x, kfirm_laplace_pdf, color="k", linestyle="--", linewidth=1, label="Laplace")
-plt.plot(kfirm_x, kfirm_norm_pdf, color="k", linestyle=":", linewidth=1, label="Normal")
-plt.ylim([0.0005,10])
-plt.xlim([-3.05,3.05])
-plt.yscale("log")
-plt.yticks(fontsize=medium_fontsize)
-plt.xticks(fontsize=medium_fontsize)
-plt.legend(fontsize=0.8 * medium_fontsize, loc="upper right")
-plt.savefig(figure_path / "dist_kfirm_growth.png", dpi=400, bbox_inches="tight")
+ax1 = axes[1]
+ax1.scatter((kfirm_bins[1:] + kfirm_bins[:-1])/2, kfirm_density, facecolors="none", edgecolors="k", marker="o", label="Simulated")
+ax1.plot(kfirm_x, kfirm_gennorm_pdf, color="k", linewidth=1, label="Subbotin")
+ax1.plot(kfirm_x, kfirm_laplace_pdf, color="k", linestyle="--", linewidth=1, label="Laplace")
+ax1.plot(kfirm_x, kfirm_norm_pdf, color="k", linestyle=":", linewidth=1, label="Normal")
+ax1.set_ylim([0.0005,10])
+ax1.set_xlim([-3.05,3.05])
+ax1.set_yscale("log")
+ax1.tick_params(axis="both", labelsize=fontsize)
+ax1.set_xlabel("Capital Firm Output Growth Rate", fontsize=fontsize + 2)
+ax1.set_ylabel("log(density)", fontsize=fontsize + 2)
+ax1.legend(fontsize=0.8 * fontsize, loc="upper right")
+ax1.text(0.5, -0.15, "(b) K-Firms Output Growth Distribution", transform=ax1.transAxes, ha="center", va="top", fontsize=fontsize + 5)
+plt.savefig(figure_path / "dist_firm_growth.png", dpi=400, bbox_inches="tight")
 print(f"  - subbotin fit\n    - beta = {kfirm_gennorm_params[0]}\n    - mu = {kfirm_gennorm_params[1]}\n    - alpha = {kfirm_gennorm_params[2]}")
 print(f"  - laplace fit\n    - mu = {kfirm_laplace_params[0]}\n    - alpha = {kfirm_laplace_params[1]}")
 print(f"  - norm fit\n    - mu = {kfirm_norm_params[0]}\n    - alpha = {kfirm_norm_params[1]}")
@@ -995,10 +1040,17 @@ normality_tests(large_snapshot_kfirms["output_growth"], significance=significanc
 
 print("\n2. Firms size distribution")
 
+fig, axes = plt.subplots(1, 2, figsize=(x_figsize * 1.75, y_figsize * 1.25), constrained_layout=True)
+
 # cfirms size distribution 
 print("- consumption firms size distribution")
 print(f"  - num obs = {len(large_snapshot_cfirms)}")
-plot_ccdf(large_snapshot_cfirms["output"], figsize=(x_figsize,y_figsize), fontsize=medium_fontsize, savefig=figure_path / "dist_cfirm_size.png")
+
+ax0 = axes[0]
+subplot_ccdf(ax=ax0, data=large_snapshot_cfirms["output"], fontsize=fontsize)
+ax0.set_xlabel("log(size)", fontsize=fontsize + 2)
+ax0.set_ylabel("log(CCDF)", fontsize=fontsize + 2)
+ax0.text(0.5, -0.2, "(a) C-Firms Size Distribution", transform=ax0.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
 # consumption firm size normality tests
 print("- consumption firms size normality tests:")
@@ -1007,7 +1059,14 @@ normality_tests(large_snapshot_cfirms["output"], significance=significance)
 # kfirms size distribution
 print("- capital firms size distribution")
 print(f"  - num obs = {len(large_snapshot_kfirms)}")
-plot_ccdf(large_snapshot_kfirms["output"], figsize=(x_figsize,y_figsize), fontsize=medium_fontsize, savefig=figure_path / "dist_kfirm_size.png")
+
+ax1 = axes[1]
+subplot_ccdf(ax=ax1, data=large_snapshot_kfirms["output"], fontsize=fontsize)
+ax1.set_xlabel("log(size)", fontsize=fontsize + 2)
+ax1.set_ylabel("log(CCDF)", fontsize=fontsize + 2)
+ax1.text(0.5, -0.2, "(b) K-Firms Size Distribution", transform=ax1.transAxes, ha="center", va="top", fontsize=fontsize + 5)
+
+plt.savefig(figure_path / "dist_firm_size.png", dpi=800, bbox_inches="tight")
 
 # capital firm size normality tests
 print("- capital firms size normality tests:")
@@ -1017,10 +1076,16 @@ normality_tests(large_snapshot_kfirms["output"], significance=significance)
 
 print("\n3. Bank size distribution")
 
+fig, ax = plt.subplots(figsize=(x_figsize,y_figsize), constrained_layout=True)
+
 # bank size distribution
 print("- bank size distribution")
 print(f"  - num obs = {len(large_snapshot_banks)}")
-plot_ccdf(large_snapshot_banks["real_loans"], figsize=(x_figsize,y_figsize), fontsize=medium_fontsize, savefig=figure_path / "dist_bank_size.png")
+subplot_ccdf(ax=ax, data=large_snapshot_banks["real_loans"], fontsize=fontsize)
+ax.set_xlabel("log(size)", fontsize=fontsize + 2)
+ax.set_ylabel("log(CCDF)", fontsize=fontsize + 2)
+
+plt.savefig(figure_path / "dist_bank_size.png", dpi=800, bbox_inches="tight")
 
 # bank size normality tests
 print("- bank size normality tests:")
@@ -1030,20 +1095,7 @@ normality_tests(large_snapshot_banks["real_loans"], significance=significance)
 
 print("\n4. Lumpiness of investment rates")
 
-print("- plot investment rates for selected consumption firms")
-
-fig, ax = plt.subplots(figsize=(x_figsize,y_figsize))
-
-for cfirm_id in cfirm_ids:
-    cfirm = cfirms_sim[cfirms_sim["id"] == cfirm_id]
-    cfirm_years = (cfirm["time"] - start) / steps
-    ax.plot(cfirm_years, cfirm["investment_rate"])
-
-ax.tick_params(axis="both", labelsize=small_fontsize)
-plt.savefig(figure_path / "investment_rate_lumpiness.png", dpi=400, bbox_inches="tight")
-
-# skewness test
-
+### skewness test ###
 stat_skew, p_val2_skew = stats.skewtest(cfirms["investment_rate"])
 
 # One-sided test for skew > 0
@@ -1053,8 +1105,7 @@ print("- skewness test")
 print(f"  - test stat = {stat_skew:.4f}")
 print(f"  - one-sided p-value (skew > 0) = {p_val1_skew * 100:.4f}")
 
-# Leptokurtic test
-
+### leptokurtic test ###
 stat_kurtosis, p_val2_kurtosis = stats.kurtosistest(cfirms["investment_rate"])
 
 # One-sided test for excess kurtosis > 0

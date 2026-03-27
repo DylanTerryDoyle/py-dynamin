@@ -2,8 +2,9 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gs
 from dynamin.utils import load_config, sql_engine
-from analysis.utils import load_micro_data, box_plot_scenarios
+from analysis.utils import load_micro_data, box_plot_scenarios, format_scenario_name, sub_boxplot
 
 # is this analysis from the examples folder?
 is_true = input("Run macro.py analysis for an example from the examples folder [y/n]: ").lower().startswith("y")
@@ -20,8 +21,7 @@ plt.rcParams["font.family"] = ["serif"]
 x_figsize = 10
 y_figsize = x_figsize/2
 # fontsize
-large_fontsize = 35
-medium_fontsize = 25
+fontsize = 18
 # upper decile 
 upper = 0.95
 # lower decile
@@ -83,13 +83,21 @@ scenarios = pd.read_sql_query(
 
 print(f"Creating ESL/GDP plots...")
 
-# start loop over databases
+fig = plt.figure(figsize=(x_figsize * 2, x_figsize))
+
+outer = gs.GridSpec(2, 2, figure=fig, wspace=0.2, hspace=0.4)
 
 for i, scenario in scenarios.iterrows():
-    # suffix for saving figures 
-    suffix = scenario["scenario_name"]
-    
-    # get macro data 
+
+    row = i // 2
+    col = i % 2
+
+    inner = gs.GridSpecFromSubplotSpec(
+        1, 1,
+        subplot_spec=outer[row, col],
+        hspace=0.05
+    )
+
     micro_data = load_micro_data(engine, scenario["scenario_id"], params)
 
     # average over simulations
@@ -98,16 +106,28 @@ for i, scenario in scenarios.iterrows():
     micro_upper = micro_group.quantile(upper)
     micro_lower = micro_group.quantile(lower)
 
-    # create figure
-    plt.figure(figsize=(x_figsize, y_figsize))
-    plt.plot(years, micro_median["esl_gdp"], color="k", linewidth=1)
-    plt.plot(years, micro_data.loc[micro_data["simulation_index"]==sim_index, "esl_gdp"], linestyle="--", color="k", linewidth=1)
-    plt.fill_between(years, micro_lower["esl_gdp"], micro_upper["esl_gdp"], color="grey", alpha=0.2, linewidth=1)
-    plt.tight_layout()
-    plt.ylim((-0.01, 0.11))
-    plt.yticks((0.0, 0.02, 0.04, 0.06, 0.08, 0.1),fontsize=medium_fontsize)
-    plt.xticks(fontsize=medium_fontsize)
-    plt.savefig(figure_path / f"esl_gdp_{suffix}", bbox_inches="tight")
+    ax = fig.add_subplot(inner[0])
+
+    ### ESL/GDP ###
+    ax.plot(years, micro_median["esl_gdp"], color="k", linewidth=1)
+    ax.plot(years, micro_data.loc[micro_data["simulation_index"]==sim_index, "esl_gdp"], linestyle="--", color="k", linewidth=1)
+    ax.fill_between(years, micro_lower["esl_gdp"], micro_upper["esl_gdp"], color="grey", alpha=0.2, linewidth=1)
+    ax.set_ylim((-0.01, 0.11))
+    ax.set_yticks((0.0, 0.02, 0.04, 0.06, 0.08, 0.1))
+    ax.set_ylabel(r"ESL/GDP$_N$", fontsize=fontsize + 2)
+    ax.set_xlabel("Years", fontsize=fontsize + 2)
+
+    # bottom title 
+    # title = format_scenario_name(scenario["scenario_name"])
+    full_title = f"({chr(97 + i)}) {format_scenario_name(scenario['scenario_name'])}"
+
+    ax.text(0.5, -0.25, full_title, transform=ax.transAxes, ha="center", va="top", fontsize=fontsize + 5)
+
+    # clean ticks
+    ax.label_outer()
+    ax.tick_params(labelsize=fontsize)
+
+plt.savefig(figure_path / "esl_gdp.png", dpi=800, bbox_inches="tight")
 
 
 ### Plot Box Plots Scenarios ###
@@ -124,24 +144,53 @@ micro_scenario_data = {short_name: load_micro_data(engine, scenario_id, params) 
 xticks = [1, 2, 3, 4]
 colours = ["tab:blue", "tab:blue", "tab:green", "tab:green"]
 
-micro_vars = [
-    "cfirm_hpi", "kfirm_hpi", "bank_hpi", 
-    "cfirm_nhhi", "kfirm_nhhi", "bank_nhhi", 
-    "cfirm_probability_default_crises0", "kfirm_probability_default_crises0", "bank_probability_default_crises0", 
-    "cfirm_probability_default_crises1", "kfirm_probability_default_crises1", "bank_probability_default_crises1"
-]
+micro_vars = {
+    "C-Firm Instability": "cfirm_hpi",
+    "K-Firm Instability": "kfirm_hpi",
+    "Bank Instability": "bank_hpi",
+    "C-Firm Concentration": "cfirm_nhhi",
+    "K-Firm Concentration": "kfirm_nhhi",
+    "Bank Concentration": "bank_nhhi",
+    "C-Firm Defaults": "cfirm_probability_default_crises0",
+    "K-Firm Defaults": "kfirm_probability_default_crises0",
+    "Bank Defaults": "bank_probability_default_crises0",
+    "C-Firm Crisis Defaults": "cfirm_probability_default_crises1",
+    "K-Firm Crisis Defaults": "kfirm_probability_default_crises1",
+    "Bank Crisis Defaults": "bank_probability_default_crises1"
+}
 
-for var in micro_vars:
-    box_plot_scenarios(
-        micro_scenario_data,
-        variable = var, 
-        figsize = (x_figsize, y_figsize),
-        fontsize = large_fontsize, 
-        xlabels = scenarios_short_names,
-        xticks = xticks,
-        colours = colours,
-        figure_path = figure_path
-    )
+ylabel_dict = {
+    "cfirm_hpi": "HPI",
+    "kfirm_hpi": "HPI",
+    "bank_hpi": "HPI",
+    "cfirm_nhhi": r"HHI$^*$",
+    "kfirm_nhhi": r"HHI$^*$",
+    "bank_nhhi": r"HHI$^*$",
+    "cfirm_probability_default_crises0": "Pr(default|no crisis)",
+    "kfirm_probability_default_crises0": "Pr(default|no crisis)",
+    "bank_probability_default_crises0": "Pr(default|no crisis)",
+    "cfirm_probability_default_crises1": "Pr(default|crisis)",
+    "kfirm_probability_default_crises1": "Pr(default|crisis)",
+    "bank_probability_default_crises1": "Pr(default|crisis)"
+}
+
+box_plot_scenarios(
+    plot_data = micro_scenario_data,
+    variables = micro_vars,
+    scenarios_short_names = scenarios_short_names,
+    ncols = 3,
+    figsize = (x_figsize * 2, x_figsize * 1.75),
+    fontsize = fontsize,
+    colours = colours,
+    ylabel_dict = ylabel_dict,
+    whis = (lower*100, upper*100),
+    wspace=0.3,
+    hspace=0.35,
+    sub_title_depth=0.15,
+    figure_path = figure_path,
+    figure_name = "box_plots_micro.png",
+    dpi=800
+)
 
 ### Age Box Plots ###
 
@@ -152,7 +201,10 @@ q_small = 0.50
 
 print("Creating age plots...")
 
-# Dictionaries for box plots
+# age box plots dictionary
+age_data = {}
+
+# dictionaries for large and small firms
 cfirm_large_ages = {}
 cfirm_small_ages = {}
 kfirm_large_ages = {}
@@ -160,10 +212,7 @@ kfirm_small_ages = {}
 bank_large_ages = {}
 bank_small_ages = {}
 
-for short_name, scenario_id in zip(
-    scenarios_short_names,
-    scenarios["scenario_id"]
-):
+for short_name, scenario_id in zip(scenarios_short_names, scenarios["scenario_id"]):
 
     # Load full cfirm dataset for this scenario
     cfirms = pd.read_sql_query(
@@ -306,82 +355,54 @@ for short_name, scenario_id in zip(
     for key in bank_small_ages:
         bank_small_ages[key] = bank_small_ages[key].rename(columns={"age": "bank_age_small"})
 
-# Large cfirms
-box_plot_scenarios(
-    cfirm_large_ages,
-    variable="cfirm_age_large",
-    figsize=(x_figsize, y_figsize),
-    fontsize=large_fontsize,
-    xlabels=scenarios_short_names,
-    xticks=xticks,
-    colours=colours,
-    figure_path=figure_path,
-    ylim=(-5,105)
-)
+age_scenario_data = {}
 
-# Large kfirms
-box_plot_scenarios(
-    kfirm_large_ages,
-    variable="kfirm_age_large",
-    figsize=(x_figsize, y_figsize),
-    fontsize=large_fontsize,
-    xlabels=scenarios_short_names,
-    xticks=xticks,
-    colours=colours,
-    figure_path=figure_path,
-    ylim=(-5,105)
-)
+# combine large and small ages into age_data dictionary for box plots
+for scenario in scenarios_short_names:
+    age_scenario_data[scenario] = pd.concat([
+        cfirm_large_ages[scenario],
+        kfirm_large_ages[scenario],
+        bank_large_ages[scenario],
+        cfirm_small_ages[scenario],
+        kfirm_small_ages[scenario],
+        bank_small_ages[scenario],
+    ], axis=1)
 
-# Large banks
-box_plot_scenarios(
-    bank_large_ages,
-    variable="bank_age_large",
-    figsize=(x_figsize, y_figsize),
-    fontsize=large_fontsize,
-    xlabels=scenarios_short_names,
-    xticks=xticks,
-    colours=colours,
-    figure_path=figure_path,
-    ylim=(-5,105)
-)
+age_vars = {
+    "Large Consumption Firms": "cfirm_age_large",
+    "Large Capital Firms": "kfirm_age_large",
+    "Large Banks": "bank_age_large",
+    "Small Consumption Firms": "cfirm_age_small",
+    "Small Capital Firms": "kfirm_age_small",
+    "Small Banks": "bank_age_small",
+}
 
-# Small cfirms
-box_plot_scenarios(
-    cfirm_small_ages,
-    variable="cfirm_age_small",
-    figsize=(x_figsize, y_figsize),
-    fontsize=large_fontsize,
-    xlabels=scenarios_short_names,
-    xticks=xticks,
-    colours=colours,
-    figure_path=figure_path,
-    ylim=(-5,105)
-)
+ylabel_dict = {
+    "cfirm_age_large": "Age",
+    "kfirm_age_large": "Age",
+    "bank_age_large": "Age",
+    "cfirm_age_small": "Age",
+    "kfirm_age_small": "Age",
+    "bank_age_small": "Age",
+}
 
-# Small kfirms
 box_plot_scenarios(
-    kfirm_small_ages,
-    variable="kfirm_age_small",
-    figsize=(x_figsize, y_figsize),
-    fontsize=large_fontsize,
-    xlabels=scenarios_short_names,
-    xticks=xticks,
-    colours=colours,
-    figure_path=figure_path,
-    ylim=(-5,105)
-)
-
-# Small banks
-box_plot_scenarios(
-    bank_small_ages,
-    variable="bank_age_small",
-    figsize=(x_figsize, y_figsize),
-    fontsize=large_fontsize,
-    xlabels=scenarios_short_names,
-    xticks=xticks,
-    colours=colours,
-    figure_path=figure_path,
-    ylim=(-5,105)
+    plot_data = age_scenario_data,
+    variables = age_vars,
+    scenarios_short_names = scenarios_short_names,
+    ncols = 3,
+    figsize = (x_figsize * 2, x_figsize),
+    fontsize = fontsize,
+    colours = colours,
+    ylabel_dict = ylabel_dict,
+    whis = (lower*100, upper*100),
+    ylim_dict={value: (-5,105) for key, value in age_vars.items()},
+    wspace=0.25,
+    hspace=0.3,
+    sub_title_depth=0.15,
+    figure_path = figure_path,
+    figure_name = "box_plots_age.png",
+    dpi=800
 )
 
 print(f"FINISHED MICRO BATCH ANALYSIS! Check your micro figures folder\n=> {figure_path}\n")
