@@ -260,7 +260,7 @@ def box_plot_scenarios(
     figure_path: Path | str | None = None,
     figure_name: str | None = None,
     dp: int = 3,
-    dpi: int = 500
+    dpi: int = 400
 ):
     """
     Create one figure with multiple subplots, where each subplot is a box plot

@@ -127,7 +127,7 @@ for i, scenario in scenarios.iterrows():
     ax.label_outer()
     ax.tick_params(labelsize=fontsize)
 
-plt.savefig(figure_path / "esl_gdp.png", dpi=800, bbox_inches="tight")
+plt.savefig(figure_path / "esl_gdp.png", dpi=400, bbox_inches="tight")
 
 
 ### Plot Box Plots Scenarios ###
@@ -189,7 +189,7 @@ box_plot_scenarios(
     sub_title_depth=0.15,
     figure_path = figure_path,
     figure_name = "box_plots_micro.png",
-    dpi=800
+    dpi=400
 )
 
 ### Age Box Plots ###
@@ -402,7 +402,7 @@ box_plot_scenarios(
     sub_title_depth=0.15,
     figure_path = figure_path,
     figure_name = "box_plots_age.png",
-    dpi=800
+    dpi=400
 )
 
 print(f"FINISHED MICRO BATCH ANALYSIS! Check your micro figures folder\n=> {figure_path}\n")

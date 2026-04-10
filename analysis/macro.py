@@ -144,7 +144,7 @@ for i, scenario in scenarios.iterrows():
         ax.label_outer()
         ax.tick_params(labelsize=fontsize)
 
-plt.savefig(figure_path / "gdp_shares.png", dpi=800, bbox_inches="tight")
+plt.savefig(figure_path / "gdp_shares.png", dpi=400, bbox_inches="tight")
 
 ### Plot Box Plots Scenarios ###
 
@@ -185,7 +185,7 @@ box_plot_scenarios(
     figure_name = "box_plots_macro.png",
     whis = (lower*100, upper*100),
     sub_title_depth=0.15,
-    dpi=800
+    dpi=400
 )
 
 ### crisis probability ###

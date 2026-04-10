@@ -261,7 +261,7 @@ subplot_cross_correlation(
 ax1.legend(fontsize=0.8 *fontsize, loc="upper right")
 ax1.text(0.5, -0.25, "(b) Debt & Unemployment", transform=ax1.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
-plt.savefig(figure_path / "minskyan_ccf.png", dpi=800, bbox_inches="tight")
+plt.savefig(figure_path / "minskyan_ccf.png", dpi=400, bbox_inches="tight")
 
 print("- pre-recession peak of credit rate and debt ratio")
 
@@ -325,7 +325,7 @@ ax1.text(0.5, -0.2, "(b) Debt Ratio", transform=ax1.transAxes, ha="center", va="
 # legend
 plt.legend(fontsize=0.8 * fontsize)
 # save single figure
-plt.savefig(figure_path / "minsky_recessions.png", dpi=800, bbox_inches="tight")
+plt.savefig(figure_path / "minsky_recessions.png", dpi=400, bbox_inches="tight")
 
 ### 2. Debt-deflation ###
 
@@ -358,7 +358,7 @@ ax.legend(fontsize=0.8 * fontsize)
 ax.tick_params(axis="both", labelsize=fontsize)
 ax.set_ylabel("Inflation", fontsize=fontsize + 2)
 ax.set_xlabel("Lag (Years)", fontsize=fontsize + 2)
-plt.savefig(figure_path / "debt_deflation_recessions.png", dpi=800, bbox_inches="tight")
+plt.savefig(figure_path / "debt_deflation_recessions.png", dpi=400, bbox_inches="tight")
 
 ### 3. real gdp growth shape ###
 
@@ -396,7 +396,7 @@ plt.xticks(fontsize=fontsize)
 plt.xlabel("Real GDP Growth Rate", fontsize=fontsize + 2)
 plt.ylabel("log(density)", fontsize=fontsize + 2)
 plt.legend(fontsize=0.8 * fontsize, loc="upper right")
-plt.savefig(figure_path / "dist_rgdp_growth.png", dpi=800, bbox_inches="tight")
+plt.savefig(figure_path / "dist_rgdp_growth.png", dpi=400, bbox_inches="tight")
 
 print("- created real GDP growth rate distribution plot")
 print("- distribution fit parameters:")
@@ -477,7 +477,7 @@ else:
     ax1.text(0.5, -0.2, "(b) Power-law Fit", transform=ax1.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
     # save figure
-    plt.savefig(figure_path / "dist_recession_duration.png", dpi=800, bbox_inches="tight")
+    plt.savefig(figure_path / "dist_recession_duration.png", dpi=400, bbox_inches="tight")
 
     # print results
     print(f"- number of recession periods = {len(durations)}")
@@ -575,7 +575,7 @@ subplot_autocorrelation(
 
 ax21.text(0.5, -0.2, "(f) Corporate Debt", transform=ax21.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
-plt.savefig(figure_path / "autocorrelations.png", dpi=800, bbox_inches="tight")
+plt.savefig(figure_path / "autocorrelations.png", dpi=400, bbox_inches="tight")
 
 ### 6. Cross-correlation between macro variables ###
 
@@ -644,7 +644,7 @@ subplot_cross_correlation(
 
 ax11.text(0.5, -0.2, "(d) Real GDP & Unemployment Rate", transform=ax11.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
-plt.savefig(figure_path / "cross_correlations.png", dpi=800, bbox_inches="tight")
+plt.savefig(figure_path / "cross_correlations.png", dpi=400, bbox_inches="tight")
 
 ### 7. volatility hierarchy ###
 
@@ -787,7 +787,7 @@ print(f"  - slope = {ppc_results.params["unemployment_rate"]:.4f}")
 print(f"  - R-squared = {ppc_results.rsquared:.4f}")
 
 # save figure
-plt.savefig(figure_path / "relationships.png", dpi=800, bbox_inches="tight")
+plt.savefig(figure_path / "relationships.png", dpi=400, bbox_inches="tight")
 
 ###------------------------------###
 ### microeconomic stylised facts ###
@@ -1066,7 +1066,7 @@ ax1.set_xlabel("log(size)", fontsize=fontsize + 2)
 ax1.set_ylabel("log(CCDF)", fontsize=fontsize + 2)
 ax1.text(0.5, -0.2, "(b) K-Firms Size Distribution", transform=ax1.transAxes, ha="center", va="top", fontsize=fontsize + 5)
 
-plt.savefig(figure_path / "dist_firm_size.png", dpi=800, bbox_inches="tight")
+plt.savefig(figure_path / "dist_firm_size.png", dpi=400, bbox_inches="tight")
 
 # capital firm size normality tests
 print("- capital firms size normality tests:")
@@ -1085,7 +1085,7 @@ subplot_ccdf(ax=ax, data=large_snapshot_banks["real_loans"], fontsize=fontsize)
 ax.set_xlabel("log(size)", fontsize=fontsize + 2)
 ax.set_ylabel("log(CCDF)", fontsize=fontsize + 2)
 
-plt.savefig(figure_path / "dist_bank_size.png", dpi=800, bbox_inches="tight")
+plt.savefig(figure_path / "dist_bank_size.png", dpi=400, bbox_inches="tight")
 
 # bank size normality tests
 print("- bank size normality tests:")
